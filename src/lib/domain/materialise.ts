@@ -91,7 +91,19 @@ export function materialiseDay(input: MaterialiseInput): MaterialiseResult {
 
       meal.ingredients.forEach((ingredient, index) => {
         const quantity = ingredient.quantityByDayType[input.dayTypeId] ?? 0;
-        if (!includeZero && (!Number.isFinite(quantity) || quantity <= 0)) return;
+
+        // A quantity that is not a real number cannot be portioned, weighed or
+        // added up, so it never becomes a row on the day — not even when zero
+        // quantities are being kept. Snapshotting it would bake the problem
+        // into history.
+        if (!Number.isFinite(quantity)) {
+          warnings.push(
+            `${meal.name}: an ingredient has an amount that is not a number, so it was left out of the day.`,
+          );
+          return;
+        }
+
+        if (!includeZero && quantity <= 0) return;
 
         const foodId = resolveIngredientFood(ingredient, optionPreferences);
         const food = foodId ? input.foods[foodId] : undefined;

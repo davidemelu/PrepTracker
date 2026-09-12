@@ -110,6 +110,22 @@ describe('nutrition', () => {
     expect(macrosForQuantity(null, 100, 'g').calories).toBeNull();
   });
 
+  it('returns unknown, not zero, for a quantity that is not a number', () => {
+    // round() turns a non-finite result into 0, so without an explicit guard an
+    // unusable quantity was snapshotted into the day as "0 kcal" — which reads
+    // as a food with no calories rather than a number nobody could work out.
+    for (const quantity of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      const macros = macrosForQuantity(chicken, quantity, 'g');
+      expect(macros.calories).toBeNull();
+      expect(macros.protein).toBeNull();
+    }
+  });
+
+  it('returns unknown when the nutrition basis is not a number', () => {
+    const broken = { basisQty: Number.NaN, basisUnit: 'g', calories: 165 };
+    expect(macrosForQuantity(broken, 100, 'g').calories).toBeNull();
+  });
+
   it('sums macros and reports what is missing', () => {
     const totals = sumMacros([
       { name: 'Rice', macros: macrosForQuantity({ basisQty: 100, basisUnit: 'g', calories: 130, protein: 2.7 }, 225, 'g') },
