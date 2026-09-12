@@ -8,6 +8,7 @@ import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/domain/grocery';
 import { UNIT_DEFINITIONS } from '@/lib/domain/units';
 import { useAction } from '@/lib/hooks/use-action';
 import { Button } from '@/components/ui/button';
+import { FieldError } from '@/components/ui/field-error';
 import { DeleteButton } from '@/components/ui/delete-button';
 import { Input, NumberInput, Textarea } from '@/components/ui/input';
 import { Label, Switch, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/primitives';
@@ -138,7 +139,7 @@ export function FoodForm({
               aria-invalid={Boolean(save.fieldErrors.name)}
             />
             {save.fieldErrors.name ? (
-              <p className="text-sm text-destructive">{save.fieldErrors.name[0]}</p>
+              <FieldError>{save.fieldErrors.name[0]}</FieldError>
             ) : null}
           </div>
 
@@ -202,7 +203,7 @@ export function FoodForm({
                   are above 100%.
                 </p>
                 {save.fieldErrors.cookingYieldPct ? (
-                  <p className="text-sm text-destructive">{save.fieldErrors.cookingYieldPct[0]}</p>
+                  <FieldError>{save.fieldErrors.cookingYieldPct[0]}</FieldError>
                 ) : null}
               </div>
             ) : null}
@@ -375,7 +376,7 @@ export function FoodForm({
         />
       ) : null}
 
-      {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
+      {save.error ? <FieldError>{save.error}</FieldError> : null}
 
       <SheetFooter>
         {onCancel ? (

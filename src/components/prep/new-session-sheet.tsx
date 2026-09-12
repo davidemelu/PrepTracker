@@ -7,6 +7,7 @@ import { createPrepSession } from '@/lib/actions/prep';
 import { todayKey } from '@/lib/domain/dates';
 import { useAction } from '@/lib/hooks/use-action';
 import { Button, type ButtonProps } from '@/components/ui/button';
+import { FieldError } from '@/components/ui/field-error';
 import { Input, NumberInput } from '@/components/ui/input';
 import { Label } from '@/components/ui/primitives';
 import { Sheet, SheetContent, SheetFooter } from '@/components/ui/sheet';
@@ -87,7 +88,7 @@ export function NewSessionSheet({
             <Input id="ps-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Sunday prep" />
           </div>
 
-          {create.error ? <p className="text-sm text-destructive">{create.error}</p> : null}
+          {create.error ? <FieldError>{create.error}</FieldError> : null}
         </div>
 
         <SheetFooter>

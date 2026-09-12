@@ -15,6 +15,7 @@ import { formatWater } from '@/lib/domain/water';
 import { useAction } from '@/lib/hooks/use-action';
 import { ThemeToggle } from '@/components/more/theme-toggle';
 import { Button } from '@/components/ui/button';
+import { FieldError } from '@/components/ui/field-error';
 import { Card } from '@/components/ui/card';
 import { NumberInput, Textarea } from '@/components/ui/input';
 import { Label, Switch } from '@/components/ui/primitives';
@@ -154,8 +155,8 @@ export function SettingsManager({ initial, weekSummary }: { initial: SettingsVal
           <Field id="quick-a" label="Quick add A" unit="mL" value={quickA} onChange={setQuickA} />
           <Field id="quick-b" label="Quick add B" unit="mL" value={quickB} onChange={setQuickB} />
         </div>
-        {saveWater.fieldErrors.targetMl ? <p className="text-sm text-destructive">{saveWater.fieldErrors.targetMl[0]}</p> : null}
-        {saveQuick.error ? <p className="text-sm text-destructive">{saveQuick.error}</p> : null}
+        {saveWater.fieldErrors.targetMl ? <FieldError>{saveWater.fieldErrors.targetMl[0]}</FieldError> : null}
+        {saveQuick.error ? <FieldError>{saveQuick.error}</FieldError> : null}
         <SaveRow
           pending={saveWater.isPending || saveQuick.isPending}
           saved={saved === 'water'}
@@ -196,7 +197,7 @@ export function SettingsManager({ initial, weekSummary }: { initial: SettingsVal
           </span>
           <Switch checked={timing.autoScheduleMeals} onCheckedChange={(checked) => setT('autoScheduleMeals', checked)} />
         </label>
-        {saveTiming.error ? <p className="text-sm text-destructive">{saveTiming.error}</p> : null}
+        {saveTiming.error ? <FieldError>{saveTiming.error}</FieldError> : null}
         <SaveRow
           pending={saveTiming.isPending}
           saved={saved === 'timing'}
@@ -225,7 +226,7 @@ export function SettingsManager({ initial, weekSummary }: { initial: SettingsVal
           <Field id="portion" label="Default portion" unit="g" value={portion} onChange={setPortion} />
           <Field id="plan-days" label="Days per plan" value={planDays} onChange={setPlanDays} />
         </div>
-        {saveStorage.error ? <p className="text-sm text-destructive">{saveStorage.error}</p> : null}
+        {saveStorage.error ? <FieldError>{saveStorage.error}</FieldError> : null}
         <SaveRow
           pending={saveStorage.isPending}
           saved={saved === 'storage'}

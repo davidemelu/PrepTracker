@@ -10,6 +10,7 @@ import {
 } from '@/lib/actions/plan';
 import { useAction } from '@/lib/hooks/use-action';
 import { Badge } from '@/components/ui/badge';
+import { FieldError } from '@/components/ui/field-error';
 import { Button } from '@/components/ui/button';
 import { DeleteButton } from '@/components/ui/delete-button';
 import { Card } from '@/components/ui/card';
@@ -132,7 +133,7 @@ export function PlansManager({ plans }: { plans: PlanRow[] }) {
               <Label htmlFor="plan-name">Name</Label>
               <Input id="plan-name" value={name} onChange={(e) => setName(e.target.value)} />
               {save.fieldErrors.name ? (
-                <p className="text-sm text-destructive">{save.fieldErrors.name[0]}</p>
+                <FieldError>{save.fieldErrors.name[0]}</FieldError>
               ) : null}
             </div>
             <div className="space-y-1.5">
@@ -144,7 +145,7 @@ export function PlansManager({ plans }: { plans: PlanRow[] }) {
                 onChange={(e) => setDescription(e.target.value)}
               />
             </div>
-            {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
+            {save.error ? <FieldError>{save.error}</FieldError> : null}
             <SheetFooter>
               <Button
                 variant="outline"

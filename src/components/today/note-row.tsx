@@ -5,6 +5,7 @@ import { ChevronRight, NotebookPen } from 'lucide-react';
 import { saveCheckIn, updateDayNotes } from '@/lib/actions/day';
 import { useAction } from '@/lib/hooks/use-action';
 import { Button } from '@/components/ui/button';
+import { FieldError } from '@/components/ui/field-error';
 import { Textarea } from '@/components/ui/input';
 import { Label } from '@/components/ui/primitives';
 import { Sheet, SheetContent, SheetFooter } from '@/components/ui/sheet';
@@ -159,7 +160,7 @@ export function NoteRow({ date, checkIn, dayNotes }: { date: string; checkIn: Da
               </div>
             </details>
 
-            {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
+            {save.error ? <FieldError>{save.error}</FieldError> : null}
           </div>
 
           <SheetFooter>

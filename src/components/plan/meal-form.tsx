@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { deleteMeal, saveMeal } from '@/lib/actions/plan';
 import { useAction } from '@/lib/hooks/use-action';
 import { Button } from '@/components/ui/button';
+import { FieldError } from '@/components/ui/field-error';
 import { DeleteButton } from '@/components/ui/delete-button';
 import { Input, NumberInput } from '@/components/ui/input';
 import { Checkbox, Label, Switch } from '@/components/ui/primitives';
@@ -88,7 +89,7 @@ export function MealForm({
           aria-invalid={Boolean(save.fieldErrors.name)}
         />
         {save.fieldErrors.name ? (
-          <p className="text-sm text-destructive">{save.fieldErrors.name[0]}</p>
+          <FieldError>{save.fieldErrors.name[0]}</FieldError>
         ) : null}
       </div>
 
@@ -127,7 +128,7 @@ export function MealForm({
       <fieldset className="space-y-2">
         <legend className="mb-1 text-sm font-medium">Eaten on</legend>
         {save.fieldErrors.dayTypeIds ? (
-          <p className="text-sm text-destructive">{save.fieldErrors.dayTypeIds[0]}</p>
+          <FieldError>{save.fieldErrors.dayTypeIds[0]}</FieldError>
         ) : null}
         <div className="space-y-1.5">
           {dayTypes.map((dayType) => (
@@ -195,7 +196,7 @@ export function MealForm({
         />
       ) : null}
 
-      {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
+      {save.error ? <FieldError>{save.error}</FieldError> : null}
 
       <SheetFooter>
         {onCancel ? (

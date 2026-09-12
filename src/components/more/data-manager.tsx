@@ -5,6 +5,7 @@ import { AlertTriangle, Download, Upload } from 'lucide-react';
 import { restoreFromBackup } from '@/lib/actions/data';
 import { useAction } from '@/lib/hooks/use-action';
 import { Button } from '@/components/ui/button';
+import { FieldError } from '@/components/ui/field-error';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/primitives';
@@ -134,7 +135,7 @@ export function DataManager() {
             />
           </div>
 
-          {restore.error ? <p className="text-sm text-destructive">{restore.error}</p> : null}
+          {restore.error ? <FieldError>{restore.error}</FieldError> : null}
 
           <Button
             variant="destructive"

@@ -7,6 +7,7 @@ import { updateTimingSettings } from '@/lib/actions/settings';
 import { formatTime12h } from '@/lib/domain/time';
 import { useAction } from '@/lib/hooks/use-action';
 import { Button } from '@/components/ui/button';
+import { FieldError } from '@/components/ui/field-error';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { NumberInput } from '@/components/ui/input';
 import { Label, Switch } from '@/components/ui/primitives';
@@ -93,7 +94,7 @@ export function TimingManager({
       <Label htmlFor={id}>{label}</Label>
       <NumberInput id={id} value={values[id]} onChange={(e) => set(id, e.target.value)} />
       {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
-      {save.fieldErrors[id] ? <p className="text-sm text-destructive">{save.fieldErrors[id][0]}</p> : null}
+      {save.fieldErrors[id] ? <FieldError>{save.fieldErrors[id][0]}</FieldError> : null}
     </div>
   );
 
@@ -188,7 +189,7 @@ export function TimingManager({
         </CardContent>
       </Card>
 
-      {save.error ? <p className="px-1 text-sm text-destructive">{save.error}</p> : null}
+      <FieldError className="px-1">{save.error}</FieldError>
 
       <Button
         size="block"

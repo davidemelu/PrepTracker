@@ -5,6 +5,7 @@ import { deleteIngredient, saveIngredient } from '@/lib/actions/plan';
 import { UNIT_DEFINITIONS } from '@/lib/domain/units';
 import { useAction } from '@/lib/hooks/use-action';
 import { Button } from '@/components/ui/button';
+import { FieldError } from '@/components/ui/field-error';
 import { DeleteButton } from '@/components/ui/delete-button';
 import { Input, NumberInput } from '@/components/ui/input';
 import { Label, Switch } from '@/components/ui/primitives';
@@ -153,7 +154,7 @@ export function IngredientForm({
               </option>
             ))}
           </Select>
-          {save.fieldErrors.foodId ? <p className="text-sm text-destructive">{save.fieldErrors.foodId[0]}</p> : null}
+          {save.fieldErrors.foodId ? <FieldError>{save.fieldErrors.foodId[0]}</FieldError> : null}
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -249,7 +250,7 @@ export function IngredientForm({
         />
       ) : null}
 
-      {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
+      {save.error ? <FieldError>{save.error}</FieldError> : null}
 
       <SheetFooter>
         {onCancel ? (

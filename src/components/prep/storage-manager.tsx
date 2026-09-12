@@ -12,6 +12,7 @@ import {
 import { eatFirstOrder, storageActions, type StoredPortionLike } from '@/lib/domain/storage';
 import { useAction } from '@/lib/hooks/use-action';
 import { Badge } from '@/components/ui/badge';
+import { FieldError } from '@/components/ui/field-error';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { DeleteButton } from '@/components/ui/delete-button';
@@ -244,7 +245,7 @@ function AddPortionSheet({
             />
           </div>
 
-          {add.error ? <p className="text-sm text-destructive">{add.error}</p> : null}
+          {add.error ? <FieldError>{add.error}</FieldError> : null}
         </div>
 
         <SheetFooter>

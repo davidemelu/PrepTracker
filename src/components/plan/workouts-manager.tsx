@@ -14,6 +14,7 @@ import {
 } from '@/lib/domain/workout';
 import { useAction } from '@/lib/hooks/use-action';
 import { Badge } from '@/components/ui/badge';
+import { FieldError } from '@/components/ui/field-error';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DeleteButton } from '@/components/ui/delete-button';
@@ -225,7 +226,7 @@ function FocusSheet({
               placeholder="Rear delts"
             />
             {save.fieldErrors.name ? (
-              <p className="text-sm text-destructive">{save.fieldErrors.name[0]}</p>
+              <FieldError>{save.fieldErrors.name[0]}</FieldError>
             ) : null}
           </div>
 
@@ -258,7 +259,7 @@ function FocusSheet({
               focuses, the longest gap wins.
             </p>
             {save.fieldErrors.preWorkoutMinutes ? (
-              <p className="text-sm text-destructive">{save.fieldErrors.preWorkoutMinutes[0]}</p>
+              <FieldError>{save.fieldErrors.preWorkoutMinutes[0]}</FieldError>
             ) : null}
           </div>
 
@@ -283,7 +284,7 @@ function FocusSheet({
             />
           ) : null}
 
-          {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
+          {save.error ? <FieldError>{save.error}</FieldError> : null}
         </div>
 
         <SheetFooter>
@@ -384,7 +385,7 @@ function WeekdaySheet({
             </fieldset>
           ))}
 
-          {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
+          {save.error ? <FieldError>{save.error}</FieldError> : null}
         </div>
 
         <SheetFooter>

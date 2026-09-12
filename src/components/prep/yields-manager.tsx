@@ -7,6 +7,7 @@ import { cookedToRaw } from '@/lib/domain/yield';
 import { formatAmount, round } from '@/lib/domain/units';
 import { useAction } from '@/lib/hooks/use-action';
 import { Badge } from '@/components/ui/badge';
+import { FieldError } from '@/components/ui/field-error';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -163,7 +164,7 @@ export function YieldsManager({ rows }: { rows: YieldRow[] }) {
             <p className="text-xs text-muted-foreground">
               Meat is typically 75–80%. Rice, oats and pasta gain water and sit well above 100%.
             </p>
-            {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
+            {save.error ? <FieldError>{save.error}</FieldError> : null}
           </div>
 
           <SheetFooter>

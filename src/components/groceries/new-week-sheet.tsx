@@ -6,6 +6,7 @@ import { Plus, Sparkles } from 'lucide-react';
 import { generateGroceryWeek } from '@/lib/actions/groceries';
 import { useAction } from '@/lib/hooks/use-action';
 import { Button, type ButtonProps } from '@/components/ui/button';
+import { FieldError } from '@/components/ui/field-error';
 import { Input, NumberInput } from '@/components/ui/input';
 import { Label, Switch } from '@/components/ui/primitives';
 import { Sheet, SheetContent, SheetFooter } from '@/components/ui/sheet';
@@ -128,7 +129,7 @@ export function NewWeekSheet({
             </div>
           </details>
 
-          {generate.error ? <p className="text-sm text-destructive">{generate.error}</p> : null}
+          {generate.error ? <FieldError>{generate.error}</FieldError> : null}
         </div>
 
         <SheetFooter>

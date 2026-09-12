@@ -14,6 +14,7 @@ import { formatAmount } from '@/lib/domain/units';
 import { UNIT_DEFINITIONS } from '@/lib/domain/units';
 import { useAction } from '@/lib/hooks/use-action';
 import { Badge } from '@/components/ui/badge';
+import { FieldError } from '@/components/ui/field-error';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { DeleteButton } from '@/components/ui/delete-button';
@@ -135,7 +136,7 @@ function ItemForm({
         />
       ) : null}
 
-      {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
+      {save.error ? <FieldError>{save.error}</FieldError> : null}
 
       <SheetFooter>
         <Button variant="outline" className="flex-1" onClick={onCancel}>
