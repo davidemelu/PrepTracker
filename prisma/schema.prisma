@@ -154,13 +154,18 @@ enum WaterSource {
 // ---------------------------------------------------------------------------
 
 model User {
-  id                 String   @id @default(cuid())
-  username           String   @unique
+  id                 String  @id @default(cuid())
+  username           String  @unique
   passwordHash       String
   displayName        String?
-  mustChangePassword Boolean  @default(false)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  mustChangePassword Boolean @default(false)
+
+  /// Bumped when the password changes, so sessions issued before it stop
+  /// verifying. The claim is checked on every request in getCurrentUser.
+  sessionVersion Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   settings        Settings?
   appSettings     AppSetting[]
@@ -306,6 +311,7 @@ model ScheduleDay {
   focuses ScheduleDayFocus[]
 
   @@unique([userId, dayOfWeek])
+  @@index([dayTypeId])
   @@map("schedule_days")
 }
 
@@ -346,6 +352,7 @@ model ScheduleDayFocus {
   sortOrder     Int          @default(0)
 
   @@unique([scheduleDayId, focusId])
+  @@index([focusId])
   @@map("schedule_day_focuses")
 }
 
@@ -433,6 +440,7 @@ model FoodOptionGroup {
   weekPrefs       PlanWeekPreference[]
 
   @@unique([userId, name])
+  @@index([preferredFoodId])
   @@map("food_option_groups")
 }
 
@@ -445,6 +453,7 @@ model FoodOptionGroupMember {
   sortOrder Int             @default(0)
 
   @@unique([groupId, foodId])
+  @@index([foodId])
   @@map("food_option_group_members")
 }
 
@@ -461,6 +470,8 @@ model PlanWeekPreference {
   updatedAt     DateTime        @updatedAt
 
   @@unique([userId, weekStart, optionGroupId])
+  @@index([optionGroupId])
+  @@index([foodId])
   @@map("plan_week_preferences")
 }
 
@@ -524,6 +535,7 @@ model MealDayTypeSetting {
   timeOverride String?
 
   @@unique([mealId, dayTypeId])
+  @@index([dayTypeId])
   @@map("meal_day_type_settings")
 }
 
@@ -534,7 +546,9 @@ model MealIngredient {
   meal   Meal   @relation(fields: [mealId], references: [id], onDelete: Cascade)
 
   foodId String?
-  food   Food?   @relation(fields: [foodId], references: [id], onDelete: Cascade)
+  /// Restrict, not Cascade: deleting a food used by the plan has to be an
+  /// explicit decision that names the meals, not a silent side effect.
+  food   Food?   @relation(fields: [foodId], references: [id], onDelete: Restrict)
 
   optionGroupId String?
   optionGroup   FoodOptionGroup? @relation(fields: [optionGroupId], references: [id], onDelete: Cascade)
@@ -551,6 +565,8 @@ model MealIngredient {
   dailyItems DailyMealItem[]
 
   @@index([mealId, sortOrder])
+  @@index([foodId])
+  @@index([optionGroupId])
   @@map("meal_ingredients")
 }
 
@@ -564,6 +580,7 @@ model MealIngredientQuantity {
   quantity         Float
 
   @@unique([mealIngredientId, dayTypeId])
+  @@index([dayTypeId])
   @@map("meal_ingredient_quantities")
 }
 
@@ -610,6 +627,7 @@ model SupplementSchedule {
   sortOrder     Int              @default(0)
 
   @@index([supplementId])
+  @@index([mealId])
   @@map("supplement_schedules")
 }
 
@@ -654,7 +672,8 @@ model DailyPlan {
   workoutFocuses DailyWorkoutFocus[]
 
   @@unique([userId, date])
-  @@index([userId, date])
+  @@index([dayTypeId])
+  @@index([mealPlanId])
   @@map("daily_plans")
 }
 
@@ -676,6 +695,7 @@ model DailyWorkoutFocus {
 
   @@unique([dailyPlanId, name])
   @@index([dailyPlanId, sortOrder])
+  @@index([focusId])
   @@map("daily_workout_focuses")
 }
 
@@ -711,6 +731,7 @@ model DailyMeal {
   completions MealCompletion[]
 
   @@index([dailyPlanId, sortOrder])
+  @@index([sourceMealId])
   @@map("daily_meals")
 }
 
@@ -751,6 +772,8 @@ model DailyMealItem {
   notes String?
 
   @@index([dailyMealId, sortOrder])
+  @@index([foodId])
+  @@index([sourceIngredientId])
   @@map("daily_meal_items")
 }
 
@@ -758,7 +781,10 @@ model DailyMealItem {
 model MealCompletion {
   id          String           @id @default(cuid())
   dailyMealId String
-  dailyMeal   DailyMeal        @relation(fields: [dailyMealId], references: [id], onDelete: Cascade)
+  /// Restrict: this log is the record of what was actually done, so deleting a
+  /// generated meal row must fail rather than erase it. Rebuilding a day
+  /// updates meals in place; only a full account delete removes these, in order.
+  dailyMeal   DailyMeal        @relation(fields: [dailyMealId], references: [id], onDelete: Restrict)
   action      CompletionAction
   at          DateTime         @default(now())
   note        String?
@@ -791,13 +817,15 @@ model DailySupplement {
   completions SupplementCompletion[]
 
   @@index([dailyPlanId, sortOrder])
+  @@index([supplementId])
   @@map("daily_supplements")
 }
 
 model SupplementCompletion {
   id                String           @id @default(cuid())
   dailySupplementId String
-  dailySupplement   DailySupplement  @relation(fields: [dailySupplementId], references: [id], onDelete: Cascade)
+  /// Restrict, for the same reason as MealCompletion.
+  dailySupplement   DailySupplement  @relation(fields: [dailySupplementId], references: [id], onDelete: Restrict)
   action            CompletionAction
   at                DateTime         @default(now())
 
@@ -818,6 +846,7 @@ model WaterEntry {
   createdAt   DateTime    @default(now())
 
   @@index([userId, date])
+  @@index([dailyPlanId])
   @@map("water_entries")
 }
 
@@ -911,6 +940,7 @@ model GroceryItem {
   updatedAt DateTime @updatedAt
 
   @@index([groceryWeekId, category])
+  @@index([foodId])
   @@map("grocery_items")
 }
 
@@ -935,6 +965,7 @@ model InventoryItem {
   updatedAt         DateTime        @updatedAt
 
   @@index([userId, location])
+  @@index([foodId])
   @@map("inventory_items")
 }
 
@@ -965,6 +996,7 @@ model PrepSession {
   batches PrepBatch[]
 
   @@index([userId, date])
+  @@index([groceryWeekId])
   @@map("prep_sessions")
 }
 
@@ -984,6 +1016,7 @@ model PrepTask {
   notes         String?
 
   @@index([prepSessionId, sortOrder])
+  @@index([foodId])
   @@map("prep_tasks")
 }
 
@@ -1021,6 +1054,7 @@ model PrepBatch {
   storagePortions StoragePortion[]
 
   @@index([prepSessionId])
+  @@index([foodId])
   @@map("prep_batches")
 }
 
@@ -1042,6 +1076,8 @@ model CookingYield {
   recordedAt    DateTime    @default(now())
 
   @@index([userId, foodId, recordedAt])
+  @@index([prepBatchId])
+  @@index([foodId])
   @@map("cooking_yields")
 }
 
@@ -1075,5 +1111,7 @@ model StoragePortion {
 
   @@index([userId, status])
   @@index([userId, thawOn])
+  @@index([prepBatchId])
+  @@index([foodId])
   @@map("storage_portions")
 }

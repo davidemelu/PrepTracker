@@ -103,7 +103,17 @@ export function FoodForm({
     },
   });
 
-  const remove = useAction(deleteFood, { onSuccess: finish });
+  const remove = useAction(deleteFood, {
+    onSuccess: finish,
+    // The server knows which meals lose a line; it says so before anything is
+    // deleted rather than reporting it afterwards.
+    onNeedsConfirmation: (message) => {
+      toast.warning(message, {
+        duration: 10_000,
+        action: { label: 'Delete anyway', onClick: () => remove.run({ id: values.id!, confirm: true }) },
+      });
+    },
+  });
 
   const set = <K extends keyof FoodFormValues>(key: K, value: FoodFormValues[K]) =>
     setValues((prev) => ({ ...prev, [key]: value }));

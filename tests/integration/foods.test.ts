@@ -205,7 +205,7 @@ describe('deleteFood', () => {
       },
     });
 
-    const result = await foods.deleteFood({ id: fixture.foods.rice! });
+    const result = await foods.deleteFood({ id: fixture.foods.rice!, confirm: true });
     expect(result.ok).toBe(true);
 
     const items = await prisma.dailyMealItem.findMany({
@@ -219,8 +219,24 @@ describe('deleteFood', () => {
     expect(items[0]!.foodId).toBeNull();
   });
 
-  it('removes the food from the plan and says so', async () => {
+  it('names the meals that lose a line before deleting anything', async () => {
     const result = await foods.deleteFood({ id: fixture.foods.rice! });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.needsConfirmation).toBe(true);
+    expect(result.error).toMatch(/White rice is an ingredient of/);
+    expect(result.error).toMatch(/Meal A/);
+
+    // Nothing was removed while the question was outstanding.
+    const untouched = await testPrisma().mealIngredient.findMany({
+      where: { foodId: fixture.foods.rice! },
+    });
+    expect(untouched.length).toBeGreaterThan(0);
+  });
+
+  it('removes the food from the plan once confirmed and says so', async () => {
+    const result = await foods.deleteFood({ id: fixture.foods.rice!, confirm: true });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.message).toMatch(/plan ingredient/);
@@ -229,5 +245,16 @@ describe('deleteFood', () => {
       where: { foodId: fixture.foods.rice! },
     });
     expect(remaining).toHaveLength(0);
+  });
+
+  it('deletes a food nothing uses without asking', async () => {
+    const prisma = testPrisma();
+    const spare = await prisma.food.create({
+      data: { userId: fixture.userId, name: 'Unused thing', defaultUnit: 'g' },
+    });
+
+    const result = await foods.deleteFood({ id: spare.id });
+    expect(result.ok).toBe(true);
+    expect(await prisma.food.findUnique({ where: { id: spare.id } })).toBeNull();
   });
 });
