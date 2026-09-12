@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { ChevronDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { callAction } from '@/lib/hooks/use-action';
 import { setDayType } from '@/lib/actions/day';
 import { ConfirmSheet } from '@/components/ui/confirm-sheet';
 import { SegmentedControl } from '@/components/ui/segmented-control';
@@ -28,10 +29,11 @@ interface DayStateControlProps {
 /**
  * The Training / Rest control at the top of Today.
  *
- * Up to three day types render as a segmented control; more become a chip
- * that opens a list. Switching with nothing logged applies at once. Switching
- * after a meal is logged asks whether that meal keeps the portions it was
- * eaten with, because the default must never rewrite what was eaten.
+ * Up to three day types render as a segmented control; more become a chip that
+ * opens a list. Switching with nothing logged applies at once. Switching after a
+ * meal is logged confirms first — not because anything logged is at risk, which
+ * it no longer is, but because it is worth saying that the new portions apply
+ * only to the meals still to come.
  */
 export function DayStateControl({
   date,
@@ -51,12 +53,8 @@ export function DayStateControl({
     setPendingTypeId(null);
     setListOpen(false);
     startTransition(async () => {
-      try {
-        const result = await setDayType({ date, dayTypeId });
-        if (!result.ok) toast.error(result.error);
-      } catch {
-        toast.error('Could not reach the server. The day was not changed.');
-      }
+      const result = await callAction(() => setDayType({ date, dayTypeId }));
+      if (!result.ok) toast.error(result.error);
     });
   };
 
