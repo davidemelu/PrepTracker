@@ -145,27 +145,37 @@ export interface YieldObservation {
 
 /**
  * Effective yield for a food: the mean of the most recent measured batches,
- * falling back to the seeded default until a batch has been recorded.
+ * falling back to what you set by hand, and then to the seeded default.
  *
  * A rolling mean rather than "last value wins" so a single odd batch (a lid
  * left off, a very thick steak) does not swing next week's shopping list.
+ *
+ * Measurements outrank manual values outright rather than being averaged with
+ * them. A number you typed is an estimate; a number off the scale is evidence,
+ * and mixing the two meant one measured batch after a hand-set value landed
+ * halfway between the two — so the food said 76% when the only thing ever
+ * weighed came out at 70%.
  */
 export function effectiveYield(
   observations: readonly YieldObservation[],
   fallbackPct?: number | null,
   sampleSize = 5,
 ): number | null {
-  const measured = observations
-    .filter((o) => o.source !== 'DEFAULT' && Number.isFinite(o.yieldPct) && o.yieldPct > 0)
-    .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())
-    .slice(0, Math.max(1, sampleSize));
+  const usable = observations
+    .filter((o) => Number.isFinite(o.yieldPct) && o.yieldPct > 0)
+    .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
 
-  if (measured.length === 0) {
-    return fallbackPct != null && fallbackPct > 0 ? round(fallbackPct, 2) : null;
+  const measured = usable.filter((o) => o.source === 'MEASURED').slice(0, Math.max(1, sampleSize));
+  if (measured.length > 0) {
+    const total = measured.reduce((sum, o) => sum + o.yieldPct, 0);
+    return round(total / measured.length, 2);
   }
 
-  const total = measured.reduce((sum, o) => sum + o.yieldPct, 0);
-  return round(total / measured.length, 2);
+  // Nothing weighed yet: the most recent deliberate value, then the seed.
+  const manual = usable.find((o) => o.source === 'MANUAL');
+  if (manual) return round(manual.yieldPct, 2);
+
+  return fallbackPct != null && fallbackPct > 0 ? round(fallbackPct, 2) : null;
 }
 
 export interface MeatRequirement {

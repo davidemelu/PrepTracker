@@ -174,3 +174,47 @@ describe('buildMeatRequirement', () => {
     expect(req.missingYield).toBe(true);
   });
 });
+
+describe('effectiveYield with a mix of sources', () => {
+  const at = (day: number) => `2026-09-${String(day).padStart(2, '0')}T10:00:00.000Z`;
+
+  it('lets one weighed batch override a value set by hand', () => {
+    // The point of measuring is that the scale wins. Averaging the two used to
+    // give 76, which is neither the value typed nor the value observed.
+    const value = effectiveYield(
+      [
+        { yieldPct: 82, recordedAt: at(12), source: 'MANUAL' },
+        { yieldPct: 70, recordedAt: at(13), source: 'MEASURED' },
+      ],
+      75,
+    );
+    expect(value).toBe(70);
+  });
+
+  it('still averages several weighed batches', () => {
+    const value = effectiveYield(
+      [
+        { yieldPct: 70, recordedAt: at(13), source: 'MEASURED' },
+        { yieldPct: 74, recordedAt: at(14), source: 'MEASURED' },
+      ],
+      75,
+    );
+    expect(value).toBe(72);
+  });
+
+  it('uses the most recent hand-set value until something is weighed', () => {
+    const value = effectiveYield(
+      [
+        { yieldPct: 80, recordedAt: at(12), source: 'MANUAL' },
+        { yieldPct: 85, recordedAt: at(13), source: 'MANUAL' },
+        { yieldPct: 75, recordedAt: at(11), source: 'DEFAULT' },
+      ],
+      75,
+    );
+    expect(value).toBe(85);
+  });
+
+  it('falls back to the seeded default when nothing else exists', () => {
+    expect(effectiveYield([{ yieldPct: 75, recordedAt: at(11), source: 'DEFAULT' }], 75)).toBe(75);
+  });
+});

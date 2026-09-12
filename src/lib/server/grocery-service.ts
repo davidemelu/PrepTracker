@@ -3,6 +3,7 @@ import 'server-only';
 import { prisma } from '@/lib/db';
 import { startOfWeek, toDbDate, type DayKey } from '@/lib/domain/dates';
 import {
+  applyInventory,
   generateGroceryList,
   supplementGroceryLines,
   type DayTypeCount,
@@ -161,9 +162,24 @@ export async function buildGroceryLines(input: GenerateInput): Promise<{
     restDays,
   );
 
+  // Supplements were concatenated after the inventory pass, so a tub of creatine
+  // already in the cupboard was never subtracted from the one on the list. The
+  // seed ships exactly that row, so the shipped default had the bug.
+  const nettedSupplements = input.applyInventory
+    ? applyInventory(
+        supplementLines,
+        inventory.map((item) => ({
+          foodId: item.foodId,
+          name: item.name,
+          quantity: item.quantity,
+          unit: item.unit,
+        })),
+      )
+    : { lines: supplementLines, warnings: [] as string[] };
+
   return {
-    lines: [...result.lines, ...supplementLines],
-    warnings: result.warnings,
+    lines: [...result.lines, ...nettedSupplements.lines],
+    warnings: [...new Set([...result.warnings, ...nettedSupplements.warnings])],
   };
 }
 

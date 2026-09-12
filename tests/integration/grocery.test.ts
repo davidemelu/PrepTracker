@@ -155,6 +155,35 @@ describe('buildGroceryLines', () => {
     expect(intra.shoppingUnit).toBe('scoop');
   });
 
+  it('subtracts a supplement you already have from the supplement line', async () => {
+    const prisma = testPrisma();
+
+    // A supplement is matched to a food by name, which is how packages are
+    // estimated for it; the inventory row hangs off that same food.
+    const food = await prisma.food.create({
+      data: {
+        userId: fixture.userId,
+        name: 'Creatine',
+        category: 'SUPPLEMENT',
+        defaultUnit: 'g',
+        packageSize: 300,
+        packageUnit: 'g',
+      },
+    });
+    await prisma.inventoryItem.create({
+      data: { userId: fixture.userId, foodId: food.id, name: 'Creatine', quantity: 20, unit: 'g' },
+    });
+
+    const { lines } = await generate({ includeSupplements: true, applyInventory: true });
+    const creatine = lines.find((l) => l.name === 'Creatine')!;
+
+    // 5 g a day for seven days is 35 g, less the 20 g already in the cupboard.
+    // The supplement lines used to be appended after the inventory pass, so
+    // this subtraction never happened.
+    expect(creatine.inventoryQty).toBe(20);
+    expect(creatine.shoppingQty).toBe(15);
+  });
+
   it('leaves supplements out by default', async () => {
     const { lines } = await generate();
     expect(lines.some((l) => l.name === 'Creatine')).toBe(false);

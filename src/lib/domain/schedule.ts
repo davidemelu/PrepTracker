@@ -8,7 +8,14 @@
  * time override.
  */
 
-import { addMinutes, formatTimeRange, minutesUntil, timeToMinutes } from './time';
+import {
+  addMinutes,
+  formatTimeRange,
+  minutesUntil,
+  overdueByMinutes,
+  timeToMinutes,
+  OVERDUE_GRACE_MINUTES,
+} from './time';
 
 export interface TimingPreferences {
   /** When eating starts, "HH:mm". */
@@ -456,13 +463,10 @@ export function findNextMeal<T extends { scheduledTime?: string | null; status: 
 export function findOverdueMeals<T extends { scheduledTime?: string | null; status: string }>(
   meals: readonly T[],
   nowTime: string,
-  graceMinutes = 15,
+  graceMinutes = OVERDUE_GRACE_MINUTES,
 ): T[] {
-  const now = timeToMinutes(nowTime);
   return meals.filter((meal) => {
     if (meal.status !== 'PENDING' || !meal.scheduledTime) return false;
-    const scheduled = timeToMinutes(meal.scheduledTime);
-    // Times more than 12h ahead are treated as belonging to the previous night.
-    return scheduled + graceMinutes < now && now - scheduled < 12 * 60;
+    return overdueByMinutes(nowTime, meal.scheduledTime, graceMinutes) !== null;
   });
 }

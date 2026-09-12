@@ -8,7 +8,7 @@
  */
 
 import { diffDays, type DayKey } from './dates';
-import { formatDuration, relativeMinutes } from './time';
+import { formatDuration, overdueByMinutes, relativeMinutes, OVERDUE_WINDOW_MINUTES } from './time';
 
 export type ReminderKind =
   | 'MEAL_DUE'
@@ -79,15 +79,18 @@ export function buildReminders(context: ReminderContext): Reminder[] {
 
   for (const meal of context.meals) {
     if (meal.status !== 'PENDING' || !meal.scheduledTime) continue;
-    const delta = relativeMinutes(context.nowTime, meal.scheduledTime);
+    // The same test Today's rows use, so a meal cannot be overdue on one screen
+    // and merely upcoming on the other.
+    const lateBy = overdueByMinutes(context.nowTime, meal.scheduledTime);
+    const delta = relativeMinutes(context.nowTime, meal.scheduledTime, OVERDUE_WINDOW_MINUTES);
 
-    if (delta < 0 && delta > -12 * 60) {
+    if (lateBy !== null) {
       reminders.push({
         id: `meal-overdue-${meal.id}`,
         kind: 'MEAL_OVERDUE',
         severity: 'overdue',
         title: `${meal.name} is overdue`,
-        body: `Scheduled ${formatDuration(delta)}.`,
+        body: `Scheduled ${formatDuration(-lateBy)}.`,
         href: '/today',
         priority: 0,
       });
