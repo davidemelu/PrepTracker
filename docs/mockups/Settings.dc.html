@@ -1,0 +1,176 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Settings</title>
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+  body { margin: 0; background: #fafcff; color: #0c121a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif; -webkit-font-smoothing: antialiased; font-size: 15px; line-height: 22px; }
+  a { color: #2966cc; } a:hover { color: #1f4f9f; }
+  * { box-sizing: border-box; }
+  .num { font-variant-numeric: tabular-nums; }
+  .screen { width: 390px; background: #fafcff; position: relative; display: flex; flex-direction: column; overflow: hidden; }
+  .body { display: flex; flex-direction: column; gap: 12px; padding: 0 16px 24px; }
+  .hdr { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 16px 12px; }
+  .h1 { font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+  .sub { font-size: 13px; line-height: 18px; color: #626975; margin: 0; }
+  .eyebrow { font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #626975; }
+  .section { font-size: 13px; line-height: 16px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #626975; display: flex; align-items: center; justify-content: space-between; padding: 12px 0 0; }
+  .card { background: #ffffff; border: 1px solid #dee1e7; border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+  .row { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 16px; border-top: 1px solid #dee1e7; }
+  .row:first-child { border-top: 0; }
+  .grow { flex: 1; min-width: 0; }
+  .title { font-size: 17px; line-height: 22px; font-weight: 600; }
+  .secondary { font-size: 13px; line-height: 18px; color: #626975; }
+  .metric { font-size: 28px; line-height: 32px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 48px; padding: 0 16px; border-radius: 10px; font-size: 16px; font-weight: 600; border: 1px solid transparent; }
+  .btn.hero { height: 52px; width: 100%; background: #1c8742; color: #fff; }
+  .btn.primary { background: #2966cc; color: #fff; }
+  .btn.tonal { background: #e6f3ff; color: #2966cc; height: 52px; }
+  .btn.outline { background: #ffffff; border-color: #dee1e7; color: #0c121a; height: 44px; }
+  .btn.text { background: transparent; color: #2966cc; height: 44px; padding: 0 8px; }
+  .btn.danger { background: #cc2827; color: #fff; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid #dee1e7; background: #ffffff; font-size: 15px; font-weight: 500; }
+  .chip.on { background: #e6f3ff; border-color: #2966cc; color: #2966cc; }
+  .pill { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 16px; }
+  .pill.success { background: #e0fae4; color: #067132; }
+  .pill.training { background: #e6f3ff; color: #2966cc; }
+  .pill.rest { background: #d8faf9; color: #007475; }
+  .pill.warn { background: #ffefcd; color: #9a5b00; }
+  .pill.neutral { background: #eff2f7; color: #626975; }
+  .seg { display: flex; background: #eff2f7; border-radius: 999px; padding: 4px; height: 48px; gap: 4px; }
+  .seg > div { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 999px; font-size: 15px; font-weight: 600; color: #626975; }
+  .seg > div.on { background: #2966cc; color: #fff; }
+  .seg > div.on.rest { background: #008080; }
+  .seg.small { height: 36px; padding: 3px; }
+  .seg.small > div { font-size: 13px; }
+  .seg.small > div.on { background: #ffffff; color: #0c121a; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+  .bar { height: 6px; border-radius: 999px; background: #eff2f7; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: #2966cc; border-radius: 999px; }
+  .bar.thin { height: 4px; }
+  .nav { display: flex; align-items: stretch; height: 64px; border-top: 1px solid #dee1e7; background: #ffffff; }
+  .nav > div { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 11px; font-weight: 500; color: #626975; }
+  .nav > div.on { color: #2966cc; }
+  .nav > div.on span.ind { position: absolute; width: 20px; height: 3px; border-radius: 999px; background: #2966cc; top: 0; }
+  .nav > div { position: relative; }
+  .pinned { position: absolute; left: 0; right: 0; bottom: 0; }
+  .input { display: flex; align-items: center; justify-content: space-between; height: 48px; border: 1px solid #8e929a; border-radius: 10px; padding: 0 14px; background: #ffffff; font-size: 16px; }
+  .label { font-size: 13px; line-height: 16px; font-weight: 500; }
+  .hint { font-size: 13px; line-height: 18px; color: #626975; }
+  .overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.55); }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: #ffffff; border-radius: 20px 20px 0 0; border: 1px solid #dee1e7; display: flex; flex-direction: column; }
+  .sheet-hd { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px; border-bottom: 1px solid #dee1e7; }
+  .sheet-bd { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+  .sheet-ft { display: flex; gap: 8px; padding: 12px 16px 20px; border-top: 1px solid #dee1e7; }
+  .sheet-ft .btn { flex: 1; }
+  .ing { display: flex; align-items: baseline; gap: 12px; padding: 6px 0; }
+  .ing .amt { width: 64px; flex: none; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+  .step { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-top: 1px solid #dee1e7; }
+  .step .n { width: 24px; height: 24px; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex: none; }
+  .tile { flex: 1; background: #ffffff; border: 1px solid #dee1e7; border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 2px; }
+  .cb { width: 28px; height: 28px; border-radius: 8px; border: 2px solid #8e929a; flex: none; display: flex; align-items: center; justify-content: center; }
+  .cb.on { background: #1c8742; border-color: #1c8742; color: #fff; }
+  .cb.big { width: 44px; height: 44px; border-radius: 999px; }
+  .banner { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #ffefcd; color: #9a5b00; font-size: 13px; font-weight: 500; }
+</style>
+</helmet>
+<div class="screen" style="height: 1280px;">
+
+  
+  <div class="hdr">
+    <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+      <div style="width: 44px; height: 44px; margin-left: -12px; display: flex; align-items: center; justify-content: center; color: #626975;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></div>
+      <div style="min-width: 0;">
+        <h1 class="h1">Settings</h1>
+        
+      </div>
+    </div>
+    
+  </div>
+  <div class="body">
+    
+  <div class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+    <div class="title" style="font-size: 15px;">Water</div>
+    
+      
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <span class="label">Daily target</span>
+    <div class="input num">4.0<span class="secondary">L</span></div>
+  </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+        
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <span class="label">Quick add A</span>
+    <div class="input num">250<span class="secondary">mL</span></div>
+  </div>
+        
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <span class="label">Quick add B</span>
+    <div class="input num">500<span class="secondary">mL</span></div>
+  </div>
+      </div>
+    <div style="display: flex; align-items: center; gap: 12px;"><div class="btn outline" style="flex: 1; height: 44px;">Save</div><span class="secondary" style="display: flex; align-items: center; gap: 4px; color: #067132;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg> Saved</span></div>
+  </div>
+    
+  <div class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+    <div class="title" style="font-size: 15px;">Meals &amp; timing</div>
+    
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+        
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <span class="label">First meal</span>
+    <div class="input num">8:00 AM<span class="secondary"></span></div>
+  </div>
+        
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <span class="label">Usual training</span>
+    <div class="input num">7:30 PM<span class="secondary"></span></div>
+  </div>
+      </div>
+      <div class="row" style="padding: 0; min-height: 44px; border-top: 0;"><div class="grow"><div style="font-weight: 500;">Automatic meal times</div><div class="secondary">Re-times the day around training</div></div><div style="width: 48px; height: 28px; border-radius: 999px; background: #2966cc; position: relative;"><span style="position: absolute; top: 2px; right: 2px; width: 24px; height: 24px; border-radius: 999px; background: #fff;"></span></div></div>
+    <div style="display: flex; align-items: center; gap: 12px;"><div class="btn outline" style="flex: 1; height: 44px;">Save</div><span class="secondary" style="display: flex; align-items: center; gap: 4px; color: #067132;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg> Saved</span></div>
+  </div>
+    <div class="card row" style="border-top: 0;"><div class="grow"><div style="font-weight: 500;">Training days &amp; workouts</div><div class="secondary">Mon Chest + Triceps · Tue Back + Biceps · Wed Rest…</div></div><span style="color: #626975; display: flex;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span></div>
+    
+  <div class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+    <div class="title" style="font-size: 15px;">Storage &amp; prep</div>
+    
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+        
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <span class="label">Days in the fridge</span>
+    <div class="input num">3<span class="secondary"></span></div>
+  </div>
+        
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <span class="label">Default portion</span>
+    <div class="input num">175<span class="secondary">g</span></div>
+  </div>
+      </div>
+    <div style="display: flex; align-items: center; gap: 12px;"><div class="btn outline" style="flex: 1; height: 44px;">Save</div><span class="secondary" style="display: flex; align-items: center; gap: 4px; color: #067132;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg> Saved</span></div>
+  </div>
+    
+  <div class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+    <div class="title" style="font-size: 15px;">Reminders</div>
+    
+      <div class="row" style="padding: 0; min-height: 44px; border-top: 0;"><div class="grow"><div style="font-weight: 500;">Browser notifications</div><div class="secondary">Asks for permission when turned on</div></div><div style="width: 48px; height: 28px; border-radius: 999px; background: #8e929a; position: relative;"><span style="position: absolute; top: 2px; left: 2px; width: 24px; height: 24px; border-radius: 999px; background: #fff;"></span></div></div>
+    
+  </div>
+    
+  <div class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+    <div class="title" style="font-size: 15px;">Appearance</div>
+    
+      <div class="seg small"><div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path></svg> Light</div><div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg> Dark</div><div class="on"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg> System</div></div>
+    
+  </div>
+  </div>
+  <div class="nav "><div class=""><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v4M16 2v4"></path><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M3 10h18"></path><path d="m9 16 2 2 4-4"></path></svg><span>Today</span></div><div class=""><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg><span>Plan</span></div><div class=""><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21a1 1 0 0 0 1-1v-5.35c0-.457.316-.844.727-1.041a4 4 0 0 0-2.134-7.589 5 5 0 0 0-9.186 0 4 4 0 0 0-2.134 7.588c.411.198.727.585.727 1.041V20a1 1 0 0 0 1 1Z"></path><path d="M6 17h12"></path></svg><span>Prep</span></div><div class=""><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="21" r="1"></circle><circle cx="19" cy="21" r="1"></circle><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path></svg><span>Groceries</span></div><div class="on"><span class="ind"></span><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg><span>More</span></div></div>
+
+</div>
+</x-dc>
+</body>
+</html>

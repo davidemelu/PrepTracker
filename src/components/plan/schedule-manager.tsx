@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { deleteDayType, saveDayType, updateWeeklySchedule } from '@/lib/actions/settings';
 import { weekdayName } from '@/lib/domain/dates';
 import { useAction } from '@/lib/hooks/use-action';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DeleteButton } from '@/components/ui/delete-button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label, Switch } from '@/components/ui/primitives';
@@ -112,19 +113,14 @@ function DayTypeForm({
       ) : null}
 
       {initial && dayTypes.length > 1 ? (
-        <Button
-          variant="ghost"
-          className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
-          disabled={remove.isPending}
-          onClick={() => {
-            if (confirm(`Delete ${initial.name}? Days already logged keep their recorded name.`)) {
-              remove.run({ id: initial.id });
-            }
-          }}
-        >
-          <Trash2 className="size-4" />
-          Delete day type
-        </Button>
+        <DeleteButton
+          label="Delete day type"
+          title={`Delete ${initial.name}?`}
+          description="Weekdays using it fall back to your default type. Days already logged keep their recorded name."
+          pending={remove.isPending}
+          onConfirm={() => remove.run({ id: initial.id })}
+          className="w-full"
+        />
       ) : null}
 
       {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}

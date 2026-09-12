@@ -1,14 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Boxes, Check, Scale, Snowflake } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Loader2, Snowflake } from 'lucide-react';
 import { toast } from 'sonner';
 import { storeBatchPortions, updatePrepBatch } from '@/lib/actions/prep';
+import { batchStage } from '@/lib/domain/prep-stage';
 import { planPortions } from '@/lib/domain/yield';
 import { formatAmount } from '@/lib/domain/units';
 import { useAction } from '@/lib/hooks/use-action';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { NumberInput } from '@/components/ui/input';
@@ -38,205 +39,248 @@ const toNumber = (value: string): number | undefined => {
   return Number.isFinite(parsed) ? parsed : undefined;
 };
 
+function StepMarker({ n, state }: { n: number; state: 'done' | 'active' | 'todo' }) {
+  return (
+    <span
+      className={cn(
+        'flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+        state === 'done' && 'bg-success/15 text-success',
+        state === 'active' && 'bg-primary text-primary-foreground',
+        state === 'todo' && 'bg-secondary text-muted-foreground',
+      )}
+      aria-hidden
+    >
+      {state === 'done' ? <Check className="size-3.5" strokeWidth={3} /> : n}
+    </span>
+  );
+}
+
 /**
- * One food being batch cooked, laid out as the steps you actually do:
- * weigh raw → cook → weigh cooked → see the real yield → portion → store.
+ * One food being batch cooked as a guided sequence: weigh raw → cook and
+ * weigh → store. Only the current step takes input; finished steps collapse to
+ * their value, and a finished batch collapses to one line.
  */
-export function BatchCard({ batch, prepDate }: { batch: BatchRow; prepDate: string }) {
+export function BatchCard({
+  batch,
+  prepDate,
+  daysCovered,
+  active,
+}: {
+  batch: BatchRow;
+  prepDate: string;
+  daysCovered: number;
+  active: boolean;
+}) {
   const router = useRouter();
+  const stage = batchStage(batch);
+  const [open, setOpen] = useState<boolean | null>(null);
+  const expanded = open ?? active;
+
   const [raw, setRaw] = useState(batch.rawWeightG != null ? String(batch.rawWeightG) : '');
   const [cooked, setCooked] = useState(batch.cookedWeightG != null ? String(batch.cookedWeightG) : '');
   const [portionSize, setPortionSize] = useState(String(batch.portionSizeG));
-  const [containers, setContainers] = useState(
-    batch.containersPrepared != null ? String(batch.containersPrepared) : '',
+  const [perDay, setPerDay] = useState(
+    String(Math.max(1, Math.round((batch.portionsMade ?? batch.portionsPlanned ?? daysCovered) / Math.max(1, daysCovered)))),
   );
 
   const save = useAction(updatePrepBatch, {
     successToast: false,
-    onSuccess: (data) => {
-      router.refresh();
-      if (data.measuredYieldPct != null) {
-        toast.success(
-          `Actual yield ${data.measuredYieldPct}% · ${data.portions} portions of ${portionSize} g` +
-            (data.leftoverG ? ` (${data.leftoverG} g left over)` : ''),
-        );
-      } else {
-        toast.success('Batch saved.');
-      }
-    },
+    onSuccess: () => router.refresh(),
     onNeedsConfirmation: (message) => {
-      toast.warning(message, {
-        action: { label: 'Save anyway', onClick: () => submit(true) },
-      });
+      toast.warning(message, { action: { label: 'Save anyway', onClick: () => submitCooked(true) } });
     },
   });
+  const store = useAction(storeBatchPortions, { successToast: false, onSuccess: () => router.refresh() });
 
-  const store = useAction(storeBatchPortions, { onSuccess: () => router.refresh() });
+  const suggestedRaw =
+    batch.targetCookedG != null && batch.expectedYieldPct ? Math.round(batch.targetCookedG / (batch.expectedYieldPct / 100)) : null;
 
-  const submit = (confirmYield = false) =>
+  const rawNow = toNumber(raw);
+  const cookedNow = toNumber(cooked);
+  const sizeNow = toNumber(portionSize) ?? batch.portionSizeG;
+  const preview = cookedNow != null && sizeNow > 0 ? planPortions(cookedNow, sizeNow, batch.portionsPlanned ?? undefined) : null;
+  const liveYield = rawNow != null && rawNow > 0 && cookedNow != null ? Math.round((cookedNow / rawNow) * 1000) / 10 : null;
+
+  const submitRaw = () =>
+    save.run({ id: batch.id, rawWeightG: rawNow ?? suggestedRaw ?? undefined } as unknown as Parameters<typeof updatePrepBatch>[0]);
+
+  const submitCooked = (confirmYield = false) =>
     save.run({
       id: batch.id,
-      rawWeightG: toNumber(raw),
-      cookedWeightG: toNumber(cooked),
-      portionSizeG: toNumber(portionSize),
-      containersPrepared: toNumber(containers),
+      rawWeightG: rawNow ?? batch.rawWeightG ?? undefined,
+      cookedWeightG: cookedNow,
+      portionSizeG: sizeNow,
       confirmYield,
     } as unknown as Parameters<typeof updatePrepBatch>[0]);
 
-  // Live preview while typing, before anything is saved.
-  const cookedNow = toNumber(cooked);
-  const sizeNow = toNumber(portionSize) ?? batch.portionSizeG;
-  const preview =
-    cookedNow != null && sizeNow > 0
-      ? planPortions(cookedNow, sizeNow, batch.portionsPlanned ?? undefined)
-      : null;
+  const portions = batch.portionsMade ?? preview?.portions ?? batch.portionsPlanned ?? 0;
 
-  const rawNow = toNumber(raw);
-  const liveYield =
-    rawNow != null && rawNow > 0 && cookedNow != null ? Math.round((cookedNow / rawNow) * 1000) / 10 : null;
-
-  const suggestedRaw =
-    batch.targetCookedG != null && batch.expectedYieldPct
-      ? Math.round(batch.targetCookedG / (batch.expectedYieldPct / 100))
-      : null;
-
-  const done = batch.cookedWeightG != null;
+  const summary =
+    stage === 'done'
+      ? `${batch.portionsMade ?? batch.storedPortions} × ${batch.portionSizeG} g stored · ${batch.measuredYieldPct ?? '—'}% yield`
+      : stage === 'store'
+        ? `${batch.portionsMade} × ${batch.portionSizeG} g cooked · ready to store`
+        : `Need ${batch.targetCookedG != null ? formatAmount(batch.targetCookedG, 'g') : '—'} cooked${batch.portionsPlanned ? ` · ${batch.portionsPlanned} × ${batch.portionSizeG} g` : ''}`;
 
   return (
-    <Card className={cn('overflow-hidden', done && 'border-success/40')}>
-      <div className="flex items-start justify-between gap-2 p-4 pb-2">
-        <div className="min-w-0">
-          <h3 className="font-semibold leading-tight">{batch.foodName}</h3>
-          <p className="text-sm text-muted-foreground">
-            Need {batch.targetCookedG != null ? formatAmount(batch.targetCookedG, 'g') : '—'} cooked
-            {batch.portionsPlanned ? ` · ${batch.portionsPlanned} × ${batch.portionSizeG} g` : ''}
-          </p>
-        </div>
-        {done ? (
-          <Badge variant="success">
-            <Check className="size-3" />
-            Cooked
-          </Badge>
-        ) : null}
-      </div>
+    <Card className={cn('overflow-hidden', stage === 'done' && 'border-success/40', active && 'border-primary/40 ring-1 ring-primary/15')}>
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setOpen(!expanded)}
+        className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left"
+      >
+        {stage === 'done' ? (
+          <Check className="size-5 shrink-0 text-success" strokeWidth={3} aria-hidden />
+        ) : (
+          <span className="size-5 shrink-0 rounded-full border-2 border-input" aria-hidden />
+        )}
+        <span className="min-w-0 flex-1">
+          <h3 className="text-[17px] font-semibold leading-6">{batch.foodName}</h3>
+          <span className="tabular block text-[13px] text-muted-foreground">{summary}</span>
+        </span>
+        {expanded ? <ChevronDown className="size-5 text-muted-foreground" aria-hidden /> : <ChevronRight className="size-5 text-muted-foreground" aria-hidden />}
+      </button>
 
-      <div className="space-y-3 px-4 pb-4">
-        {suggestedRaw && !done ? (
-          <p className="rounded-lg bg-muted p-2.5 text-xs text-muted-foreground">
-            Start with roughly <span className="font-medium text-foreground">{suggestedRaw} g raw</span> at
-            your current {batch.expectedYieldPct}% yield.
-          </p>
-        ) : null}
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label htmlFor={`raw-${batch.id}`}>
-              <Scale className="mr-1 inline size-3.5" />
-              Raw (g)
-            </Label>
-            <NumberInput
-              id={`raw-${batch.id}`}
-              aria-label={`Raw weight in grams for ${batch.foodName}`}
-              value={raw}
-              onChange={(e) => setRaw(e.target.value)}
-              placeholder={suggestedRaw ? String(suggestedRaw) : '0'}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor={`cooked-${batch.id}`}>Cooked (g)</Label>
-            <NumberInput
-              id={`cooked-${batch.id}`}
-              aria-label={`Cooked weight in grams for ${batch.foodName}`}
-              value={cooked}
-              onChange={(e) => setCooked(e.target.value)}
-              placeholder="0"
-            />
-          </div>
-        </div>
-
-        {liveYield != null ? (
-          <div className="rounded-lg border border-border p-3">
-            <p className="text-sm">
-              Actual yield <span className="tabular text-base font-semibold">{liveYield}%</span>
-              {batch.expectedYieldPct ? (
-                <span className="text-muted-foreground"> · expected {batch.expectedYieldPct}%</span>
-              ) : null}
-            </p>
-            {preview ? (
-              <p className="mt-1 text-sm">
-                <span className="tabular text-base font-semibold">{preview.portions}</span> portions of{' '}
-                {sizeNow} g
-                {preview.leftoverG > 0 ? (
-                  <span className="text-muted-foreground"> · {preview.leftoverG} g left over</span>
+      {expanded ? (
+        <div className="space-y-1 px-4 pb-4">
+          {/* Step 1 ---------------------------------------------------------- */}
+          <div className="flex items-start gap-3 border-t border-border py-3">
+            <StepMarker n={1} state={stage === 'raw' ? 'active' : 'done'} />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium">Weigh raw</span>
+                {stage !== 'raw' ? (
+                  <button type="button" className="tabular text-sm font-semibold" onClick={() => save.run({ id: batch.id, rawWeightG: undefined, cookedWeightG: undefined } as unknown as Parameters<typeof updatePrepBatch>[0])}>
+                    {batch.rawWeightG != null ? formatAmount(batch.rawWeightG, 'g') : ''}
+                    <span className="sr-only">, tap to change</span>
+                  </button>
                 ) : null}
-                {preview.shortfallPortions > 0 ? (
-                  <span className="block text-warning">
-                    {preview.shortfallPortions} portion{preview.shortfallPortions === 1 ? '' : 's'} short of
-                    the {batch.portionsPlanned} you planned ({preview.shortfallG} g).
+              </div>
+              {stage === 'raw' ? (
+                <>
+                  {suggestedRaw ? (
+                    <p className="text-xs text-muted-foreground">
+                      Start with about <span className="font-medium text-foreground">{suggestedRaw} g raw</span> at your current {batch.expectedYieldPct}% yield.
+                    </p>
+                  ) : null}
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor={`raw-${batch.id}`} className="sr-only">Raw weight in grams for {batch.foodName}</Label>
+                    <NumberInput
+                      id={`raw-${batch.id}`}
+                      aria-label={`Raw weight in grams for ${batch.foodName}`}
+                      value={raw}
+                      onChange={(e) => setRaw(e.target.value)}
+                      placeholder={suggestedRaw ? String(suggestedRaw) : '0'}
+                    />
+                    <span className="w-8 text-sm text-muted-foreground">g</span>
+                  </div>
+                  <Button size="block" disabled={save.isPending || (rawNow == null && suggestedRaw == null)} onClick={submitRaw}>
+                    {save.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+                    Next: cook it
+                  </Button>
+                </>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Step 2 ---------------------------------------------------------- */}
+          <div className="flex items-start gap-3 border-t border-border py-3">
+            <StepMarker n={2} state={stage === 'cooked' ? 'active' : stage === 'raw' ? 'todo' : 'done'} />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className={cn('font-medium', stage === 'raw' && 'text-muted-foreground')}>Cook, then weigh</span>
+                {stage === 'store' || stage === 'done' ? (
+                  <span className="tabular text-sm font-semibold">
+                    {batch.cookedWeightG != null ? formatAmount(batch.cookedWeightG, 'g') : ''}
+                    {batch.measuredYieldPct != null ? <span className="text-muted-foreground"> · {batch.measuredYieldPct}%</span> : null}
                   </span>
                 ) : null}
-              </p>
-            ) : null}
-            <p className="mt-1 text-xs text-muted-foreground">
-              Saving this updates the yield used for future shopping lists.
-            </p>
+              </div>
+              {stage === 'cooked' ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor={`cooked-${batch.id}`} className="sr-only">Cooked weight in grams for {batch.foodName}</Label>
+                    <NumberInput
+                      id={`cooked-${batch.id}`}
+                      aria-label={`Cooked weight in grams for ${batch.foodName}`}
+                      value={cooked}
+                      onChange={(e) => setCooked(e.target.value)}
+                      placeholder="0"
+                    />
+                    <span className="w-8 text-sm text-muted-foreground">g</span>
+                  </div>
+                  {liveYield != null ? (
+                    <div className="rounded-lg bg-muted p-3 text-sm">
+                      <p>
+                        <span className="tabular text-[17px] font-semibold">{liveYield}%</span>
+                        <span className="text-muted-foreground"> actual yield{batch.expectedYieldPct ? ` · expected ${batch.expectedYieldPct}%` : ''}</span>
+                      </p>
+                      {preview ? (
+                        <p className="mt-0.5">
+                          <span className="tabular text-[17px] font-semibold">{preview.portions}</span> portions of {sizeNow} g
+                          {preview.leftoverG > 0 ? <span className="text-muted-foreground"> · {preview.leftoverG} g left over</span> : null}
+                          {preview.shortfallPortions > 0 ? (
+                            <span className="block text-warning">
+                              {preview.shortfallPortions} portion{preview.shortfallPortions === 1 ? '' : 's'} short of the {batch.portionsPlanned} planned.
+                            </span>
+                          ) : null}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <details>
+                    <summary className="cursor-pointer list-none text-sm text-primary">Change the portion size ({sizeNow} g)</summary>
+                    <div className="mt-2 flex items-center gap-2">
+                      <NumberInput id={`size-${batch.id}`} aria-label={`Portion size in grams for ${batch.foodName}`} value={portionSize} onChange={(e) => setPortionSize(e.target.value)} />
+                      <span className="w-8 text-sm text-muted-foreground">g</span>
+                    </div>
+                  </details>
+                  <Button size="block" aria-label={`Save the ${batch.foodName} batch`} disabled={save.isPending || cookedNow == null} onClick={() => submitCooked()}>
+                    {save.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+                    Next: store portions
+                  </Button>
+                  <p className="text-xs text-muted-foreground">Saving updates the yield used for future shopping lists.</p>
+                </>
+              ) : null}
+            </div>
           </div>
-        ) : null}
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label htmlFor={`size-${batch.id}`}>Portion (g)</Label>
-            <NumberInput
-              id={`size-${batch.id}`}
-              aria-label={`Portion size in grams for ${batch.foodName}`}
-              value={portionSize}
-              onChange={(e) => setPortionSize(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor={`containers-${batch.id}`}>
-              <Boxes className="mr-1 inline size-3.5" />
-              Containers
-            </Label>
-            <NumberInput
-              id={`containers-${batch.id}`}
-              aria-label={`Containers prepared for ${batch.foodName}`}
-              value={containers}
-              onChange={(e) => setContainers(e.target.value)}
-              placeholder={preview ? String(preview.portions) : '0'}
-            />
+          {/* Step 3 ---------------------------------------------------------- */}
+          <div className="flex items-start gap-3 border-t border-border py-3">
+            <StepMarker n={3} state={stage === 'store' ? 'active' : stage === 'done' ? 'done' : 'todo'} />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className={cn('font-medium', stage !== 'store' && stage !== 'done' && 'text-muted-foreground')}>Store</span>
+                {stage === 'done' ? (
+                  <Link href="/prep/storage" className="text-sm font-semibold text-primary">
+                    {batch.storedPortions} stored
+                  </Link>
+                ) : null}
+              </div>
+              {stage === 'store' ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Fridge for the first days, the rest frozen with a thaw date each. Uses your storage settings.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <Label htmlFor={`perday-${batch.id}`} className="flex-1">Portions eaten per day</Label>
+                    <NumberInput id={`perday-${batch.id}`} className="w-24" value={perDay} onChange={(e) => setPerDay(e.target.value)} />
+                  </div>
+                  <Button
+                    size="block"
+                    disabled={store.isPending}
+                    onClick={() => store.run({ batchId: batch.id, prepDate, portionsPerDay: toNumber(perDay) ?? 1 })}
+                  >
+                    {store.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Snowflake className="size-4" aria-hidden />}
+                    Store {portions} portions
+                  </Button>
+                </>
+              ) : null}
+            </div>
           </div>
         </div>
-
-        <div className="flex gap-2">
-          <Button
-            className="flex-1"
-            aria-label={`Save the ${batch.foodName} batch`}
-            disabled={save.isPending}
-            onClick={() => submit()}
-          >
-            Save batch
-          </Button>
-          {done ? (
-            <Button
-              variant="outline"
-              className="flex-1"
-              disabled={store.isPending}
-              onClick={() => store.run({ batchId: batch.id, prepDate, portionsPerDay: 1 })}
-            >
-              <Snowflake className="size-4" />
-              {batch.storedPortions > 0 ? 'Store again' : 'Store'}
-            </Button>
-          ) : null}
-        </div>
-
-        {batch.storedPortions > 0 ? (
-          <p className="text-xs text-muted-foreground">
-            {batch.storedPortions} portion{batch.storedPortions === 1 ? '' : 's'} already assigned to the
-            fridge or freezer.
-          </p>
-        ) : null}
-      </div>
+      ) : null}
     </Card>
   );
 }

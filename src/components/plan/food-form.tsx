@@ -2,13 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Trash2 } from 'lucide-react';
+
 import { toast } from 'sonner';
 import { deleteFood, saveFood } from '@/lib/actions/foods';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/domain/grocery';
 import { UNIT_DEFINITIONS } from '@/lib/domain/units';
 import { useAction } from '@/lib/hooks/use-action';
 import { Button } from '@/components/ui/button';
+import { DeleteButton } from '@/components/ui/delete-button';
 import { Input, NumberInput, Textarea } from '@/components/ui/input';
 import { Label, Switch, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/primitives';
 import { Select } from '@/components/ui/select';
@@ -357,23 +358,14 @@ export function FoodForm({
       </Tabs>
 
       {values.id ? (
-        <Button
-          variant="ghost"
-          className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
-          disabled={remove.isPending}
-          onClick={() => {
-            if (
-              confirm(
-                `Delete ${values.name}? It will be removed from your plan. Days you have already logged keep their record.`,
-              )
-            ) {
-              remove.run({ id: values.id! });
-            }
-          }}
-        >
-          <Trash2 className="size-4" />
-          Delete food
-        </Button>
+        <DeleteButton
+          label="Delete food"
+          title={`Delete ${values.name}?`}
+          description="It is removed from your plan and future grocery lists. Days you have already logged keep their record."
+          pending={remove.isPending}
+          onConfirm={() => remove.run({ id: values.id! })}
+          className="w-full"
+        />
       ) : null}
 
       {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}

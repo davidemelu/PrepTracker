@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, MoreVertical, Play, Trash2 } from 'lucide-react';
+import { CheckCircle2, MoreVertical, Play } from 'lucide-react';
 import { deletePrepSession, setPrepSessionStatus } from '@/lib/actions/prep';
 import { useAction } from '@/lib/hooks/use-action';
 import { Button } from '@/components/ui/button';
+import { DeleteButton } from '@/components/ui/delete-button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 
 export function SessionActions({ sessionId, status }: { sessionId: string; status: string }) {
@@ -35,51 +36,31 @@ export function SessionActions({ sessionId, status }: { sessionId: string; statu
         <SheetContent title="Prep session">
           <div className="space-y-2">
             {status === 'PLANNED' ? (
-              <Button
-                size="block"
-                disabled={setStatus.isPending}
-                onClick={() => setStatus.run({ id: sessionId, status: 'IN_PROGRESS' })}
-              >
+              <Button size="block" disabled={setStatus.isPending} onClick={() => setStatus.run({ id: sessionId, status: 'IN_PROGRESS' })}>
                 <Play className="size-4" />
                 Start prepping
               </Button>
             ) : null}
 
             {status !== 'COMPLETED' ? (
-              <Button
-                variant="outline"
-                size="block"
-                disabled={setStatus.isPending}
-                onClick={() => setStatus.run({ id: sessionId, status: 'COMPLETED' })}
-              >
+              <Button variant="outline" size="block" disabled={setStatus.isPending} onClick={() => setStatus.run({ id: sessionId, status: 'COMPLETED' })}>
                 <CheckCircle2 className="size-4" />
                 Mark as finished
               </Button>
             ) : (
-              <Button
-                variant="outline"
-                size="block"
-                disabled={setStatus.isPending}
-                onClick={() => setStatus.run({ id: sessionId, status: 'IN_PROGRESS' })}
-              >
+              <Button variant="outline" size="block" disabled={setStatus.isPending} onClick={() => setStatus.run({ id: sessionId, status: 'IN_PROGRESS' })}>
                 Reopen session
               </Button>
             )}
 
-            <Button
-              variant="ghost"
+            <DeleteButton
+              label="Delete session"
+              title="Delete this prep session?"
+              description="The batches and tasks are removed. Measured cooking yields and anything already in storage are kept."
+              pending={remove.isPending}
+              onConfirm={() => remove.run({ id: sessionId })}
               size="block"
-              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-              disabled={remove.isPending}
-              onClick={() => {
-                if (confirm('Delete this prep session? Measured cooking yields are kept.')) {
-                  remove.run({ id: sessionId });
-                }
-              }}
-            >
-              <Trash2 className="size-4" />
-              Delete session
-            </Button>
+            />
           </div>
         </SheetContent>
       </Sheet>

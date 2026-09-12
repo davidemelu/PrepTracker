@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Plus, Refrigerator, Snowflake, Trash2, Utensils } from 'lucide-react';
+import { Check, Plus, Refrigerator, Snowflake, Utensils } from 'lucide-react';
 import {
   addStoragePortion,
   deleteStoragePortion,
@@ -15,6 +15,7 @@ import { useAction } from '@/lib/hooks/use-action';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { DeleteButton } from '@/components/ui/delete-button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input, NumberInput } from '@/components/ui/input';
 import { Label } from '@/components/ui/primitives';
@@ -128,40 +129,27 @@ export function StorageManager({ portions, today }: { portions: PortionRow[]; to
                       {portion.thawOn && portion.status === 'FROZEN' ? ` · thaw ${portion.thawOn}` : ''}
                     </p>
 
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
                       {portion.location === 'FREEZER' ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 px-2 text-xs"
-                          disabled={move.isPending}
-                          onClick={() => move.run({ id: portion.id })}
-                        >
-                          To fridge
+                        <Button variant="outline" size="sm" disabled={move.isPending} onClick={() => move.run({ id: portion.id })}>
+                          Move to fridge
                         </Button>
                       ) : null}
 
                       {portion.status !== 'CONSUMED' ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-2 text-xs"
-                          disabled={update.isPending}
-                          onClick={() => update.run({ id: portion.id, status: 'CONSUMED' })}
-                        >
+                        <Button variant="ghost" size="sm" disabled={update.isPending} onClick={() => update.run({ id: portion.id, status: 'CONSUMED' })}>
                           Eaten
                         </Button>
                       ) : null}
 
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        disabled={remove.isPending}
-                        onClick={() => remove.run({ id: portion.id })}
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
+                      <DeleteButton
+                        label={`Remove ${portion.label}`}
+                        title={`Remove ${portion.label}?`}
+                        description="Removes it from storage tracking only. Nothing about the prep session or your history changes."
+                        pending={remove.isPending}
+                        onConfirm={() => remove.run({ id: portion.id })}
+                        iconOnly
+                      />
                     </div>
                   </div>
                 </div>
@@ -286,3 +274,4 @@ function AddPortionSheet({
     </Sheet>
   );
 }
+

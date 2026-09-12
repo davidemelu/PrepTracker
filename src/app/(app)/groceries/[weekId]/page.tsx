@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { ShoppingBasket } from 'lucide-react';
 import { requireUser } from '@/lib/auth/guards';
 import { prisma } from '@/lib/db';
-import { fromDbDate } from '@/lib/domain/dates';
+import { formatDayShort, fromDbDate } from '@/lib/domain/dates';
 import { PageBody, PageHeader } from '@/components/layout/page-header';
 import { GroceryList, type GroceryItemRow } from '@/components/groceries/grocery-list';
 import { WeekActions } from '@/components/groceries/week-actions';
@@ -13,6 +13,8 @@ import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/primitives';
 
 export const dynamic = 'force-dynamic';
+
+const STATUS_LABEL = { DRAFT: 'Draft', ACTIVE: 'Active', COMPLETED: 'Done', ARCHIVED: 'Archived' } as const;
 
 export default async function GroceryWeekPage({ params }: { params: Promise<{ weekId: string }> }) {
   const user = await requireUser();
@@ -27,42 +29,41 @@ export default async function GroceryWeekPage({ params }: { params: Promise<{ we
 
   const total = week.items.length;
   const done = week.items.filter((i) => i.purchased || i.haveAlready).length;
+  const remaining = total - done;
   const percent = total === 0 ? 0 : Math.round((done / total) * 100);
 
   return (
     <>
       <PageHeader
         title={week.name}
-        subtitle={`${fromDbDate(week.startDate)} → ${fromDbDate(week.endDate)}`}
+        subtitle={`${formatDayShort(fromDbDate(week.startDate))} – ${formatDayShort(fromDbDate(week.endDate))}`}
         backHref="/groceries"
         action={<WeekActions weekId={week.id} status={week.status} />}
       />
 
       <PageBody>
-        <Card className="p-4">
+        <Card className="space-y-3 p-4">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <p className="text-sm font-medium">
-                {done} of {total} sorted
+              <p className="tabular text-[28px] font-semibold leading-8">
+                {remaining}{' '}
+                <span className="text-[17px] font-medium text-muted-foreground">{remaining === 1 ? 'item' : 'items'} remaining</span>
               </p>
               <p className="text-xs text-muted-foreground">
                 {week.trainingDays} training days · {week.restDays} rest days ·{' '}
-                {week.inventoryApplied ? 'inventory subtracted' : 'inventory not applied'}
+                {week.inventoryApplied ? 'uses what you already have' : 'ignores your inventory'}
               </p>
             </div>
-            <Badge variant={week.status === 'COMPLETED' ? 'success' : 'default'}>
-              {week.status.charAt(0) + week.status.slice(1).toLowerCase()}
-            </Badge>
+            <Badge variant={week.status === 'COMPLETED' ? 'success' : 'default'}>{STATUS_LABEL[week.status]}</Badge>
           </div>
-          <Progress value={percent} className="mt-3 h-2" />
+          <Progress value={percent} className="h-1.5" indicatorClassName={remaining === 0 ? 'bg-success' : undefined} />
+          <Button asChild size="hero">
+            <Link href={`/groceries/${week.id}/shop`}>
+              <ShoppingBasket className="size-5" />
+              Shop
+            </Link>
+          </Button>
         </Card>
-
-        <Button asChild size="block">
-          <Link href={`/groceries/${week.id}/shop`}>
-            <ShoppingBasket className="size-5" />
-            Start shopping
-          </Link>
-        </Button>
 
         {week.notes ? (
           <Card className="p-3">

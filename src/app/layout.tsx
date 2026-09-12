@@ -30,12 +30,12 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  // Locked so a double tap near a checkbox cannot zoom the shopping list.
-  maximumScale: 1,
+  // Pinch zoom stays enabled (WCAG 1.4.4). Double-tap zoom on controls is
+  // prevented with `touch-action: manipulation` in globals.css instead.
   viewportFit: 'cover',
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#111318' },
+    { media: '(prefers-color-scheme: light)', color: '#fafcff' },
+    { media: '(prefers-color-scheme: dark)', color: '#0a0d12' },
   ],
 };
 

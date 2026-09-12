@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Copy, Plus, Trash2 } from 'lucide-react';
+import { Check, Copy, Plus } from 'lucide-react';
 import {
   activateMealPlan,
   deleteMealPlan,
@@ -12,6 +12,7 @@ import {
 import { useAction } from '@/lib/hooks/use-action';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DeleteButton } from '@/components/ui/delete-button';
 import { Card } from '@/components/ui/card';
 import { Input, Textarea } from '@/components/ui/input';
 import { Label } from '@/components/ui/primitives';
@@ -108,20 +109,14 @@ export function PlansManager({ plans }: { plans: PlanRow[] }) {
               Duplicate
             </Button>
             {plans.length > 1 ? (
-              <Button
-                variant="ghost"
+              <DeleteButton
+                label="Delete plan"
+                title={`Delete "${plan.name}"?`}
+                description="The plan and its meals are removed. Days you have already logged are unchanged."
+                pending={remove.isPending}
+                onConfirm={() => remove.run({ id: plan.id })}
                 size="sm"
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                disabled={remove.isPending}
-                onClick={() => {
-                  if (confirm(`Delete "${plan.name}"? Days you have already logged are unchanged.`)) {
-                    remove.run({ id: plan.id });
-                  }
-                }}
-              >
-                <Trash2 className="size-4" />
-                Delete
-              </Button>
+              />
             ) : null}
           </div>
         </Card>

@@ -1,0 +1,118 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "Today · at open",
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "TodayFull.dc.html",
+      "title": "Today · full page",
+      "x": 480,
+      "y": 0,
+      "w": 390,
+      "h": 1640
+    },
+    {
+      "file": "MealDetail.dc.html",
+      "title": "Meal detail · time correction",
+      "x": 960,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "DayState.dc.html",
+      "title": "Training / Rest switch",
+      "x": 1440,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "Workout.dc.html",
+      "title": "Workout selector",
+      "x": 1920,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "WeekView.dc.html",
+      "title": "Week view",
+      "x": 2400,
+      "y": 0,
+      "w": 390,
+      "h": 880
+    },
+    {
+      "file": "Groceries.dc.html",
+      "title": "Groceries",
+      "x": 0,
+      "y": 1760,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "ShoppingMode.dc.html",
+      "title": "Shopping Mode",
+      "x": 480,
+      "y": 1760,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "PrepMode.dc.html",
+      "title": "Prep Mode",
+      "x": 960,
+      "y": 1760,
+      "w": 390,
+      "h": 1000
+    },
+    {
+      "file": "PlanEditor.dc.html",
+      "title": "Plan editor",
+      "x": 1440,
+      "y": 1760,
+      "w": 390,
+      "h": 1360
+    },
+    {
+      "file": "Settings.dc.html",
+      "title": "Settings",
+      "x": 1920,
+      "y": 1760,
+      "w": 390,
+      "h": 1280
+    }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -220,
+      "w": 460,
+      "text": "PrepTracker mobile redesign\n\nRow 1: the daily loop. Open the app, read the day state, tap one action, close.\nRow 2: planning screens where more time is fine.\n\nTokens, sizes and copy come from docs/UI_DESIGN_SPEC.md. Nothing is implemented yet."
+    },
+    {
+      "id": "today-note",
+      "x": 0,
+      "y": 880,
+      "w": 390,
+      "text": "Today at 390 × 844: the segmented Training/Rest control, the next meal with Mark eaten, and both water buttons are all visible without scrolling. Currently the first Mark as eaten is 1.8 screens down."
+    },
+    {
+      "id": "prep-note",
+      "x": 960,
+      "y": 2860,
+      "w": 390,
+      "text": "Prep: one active step at a time per batch. The raw weight is prefilled from the current yield; the cooked weight shows the real yield and portions as you type."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

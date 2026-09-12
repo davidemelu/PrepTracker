@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Minus, Package, Plus, Search, Trash2 } from 'lucide-react';
+import { Minus, Package, Plus, Search } from 'lucide-react';
 import {
   adjustInventoryQuantity,
   deleteInventoryItem,
@@ -13,6 +13,7 @@ import { UNIT_DEFINITIONS } from '@/lib/domain/units';
 import { useAction } from '@/lib/hooks/use-action';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DeleteButton } from '@/components/ui/delete-button';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input, NumberInput, Textarea } from '@/components/ui/input';
@@ -174,15 +175,14 @@ function ItemForm({
       </div>
 
       {initial ? (
-        <Button
-          variant="ghost"
-          className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
-          disabled={remove.isPending}
-          onClick={() => remove.run({ id: initial.id })}
-        >
-          <Trash2 className="size-4" />
-          Remove from inventory
-        </Button>
+        <DeleteButton
+          label="Remove from inventory"
+          title={`Remove ${initial.name}?`}
+          description="Grocery lists stop subtracting it. Nothing else changes."
+          pending={remove.isPending}
+          onConfirm={() => remove.run({ id: initial.id })}
+          className="w-full"
+        />
       ) : null}
 
       {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}

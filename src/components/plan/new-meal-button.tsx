@@ -18,9 +18,9 @@ export function NewMealButton({
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button size="sm">
+        <Button size="sm" variant="ghost" className="text-primary">
           <Plus className="size-4" />
-          Meal
+          Add meal
         </Button>
       </SheetTrigger>
       <SheetContent title="New meal" description="Add a meal to this plan.">

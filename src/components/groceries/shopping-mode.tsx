@@ -2,7 +2,7 @@
 
 import { useMemo, useOptimistic, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Plus, Search, Undo2, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Plus, Search, Undo2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { saveGroceryItem, togglePurchased } from '@/lib/actions/groceries';
 import { groupByDepartment, type FoodCategoryKey } from '@/lib/domain/grocery';
@@ -12,29 +12,27 @@ import { useAction } from '@/lib/hooks/use-action';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input, NumberInput } from '@/components/ui/input';
-import { Label, Switch } from '@/components/ui/primitives';
+import { Label } from '@/components/ui/primitives';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Sheet, SheetContent, SheetFooter } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
-import type { GroceryItemRow } from './grocery-list';
+import { packsLabel, type GroceryItemRow } from './grocery-list';
 
 /**
  * In-store mode.
  *
  * Deliberately sparse: full-width rows, a huge tick target, one number that
- * matters (how many left), and an undo. Nothing here should need two hands or
- * careful aim while pushing a trolley.
+ * matters (how many left), and an undo. Ticked items drop into a collapsed
+ * "In the trolley" group at the bottom so the list only ever shows what is
+ * still to find.
  */
-export function ShoppingMode({
-  groceryWeekId,
-  items,
-}: {
-  groceryWeekId: string;
-  items: GroceryItemRow[];
-}) {
+export function ShoppingMode({ groceryWeekId, items }: { groceryWeekId: string; items: GroceryItemRow[] }) {
   const router = useRouter();
-  const [hideDone, setHideDone] = useState(true);
+  const [view, setView] = useState<'remaining' | 'all'>('remaining');
   const [query, setQuery] = useState('');
+  const [searching, setSearching] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [trolleyOpen, setTrolleyOpen] = useState(false);
   const [lastToggled, setLastToggled] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
@@ -55,150 +53,142 @@ export function ShoppingMode({
     });
   };
 
-  const active = useMemo(
-    () => optimisticItems.filter((item) => !item.haveAlready),
-    [optimisticItems],
-  );
+  const active = useMemo(() => optimisticItems.filter((item) => !item.haveAlready), [optimisticItems]);
+  const needle = query.trim().toLowerCase();
+  const matches = (item: GroceryItemRow) =>
+    !needle || item.name.toLowerCase().includes(needle) || (item.department ?? '').toLowerCase().includes(needle);
 
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return active.filter((item) => {
-      if (hideDone && item.purchased) return false;
-      if (!needle) return true;
-      return (
-        item.name.toLowerCase().includes(needle) ||
-        (item.department ?? '').toLowerCase().includes(needle)
-      );
-    });
-  }, [active, hideDone, query]);
+  const remainingItems = useMemo(() => active.filter((i) => !i.purchased && matches(i)), [active, needle]); // eslint-disable-line react-hooks/exhaustive-deps
+  const trolleyItems = useMemo(() => active.filter((i) => i.purchased && matches(i)), [active, needle]); // eslint-disable-line react-hooks/exhaustive-deps
+  const listed = view === 'all' ? active.filter(matches) : remainingItems;
 
-  const groups = useMemo(() => groupByDepartment(filtered), [filtered]);
+  const groups = useMemo(() => groupByDepartment(listed), [listed]);
   const remaining = active.filter((item) => !item.purchased).length;
   const total = active.length;
 
+  const row = (item: GroceryItemRow) => {
+    const packs = packsLabel(item);
+    return (
+      <button
+        key={item.id}
+        type="button"
+        onClick={() => toggle(item, !item.purchased)}
+        className={cn('flex min-h-16 w-full items-center gap-4 px-4 py-2 text-left transition-colors active:bg-accent', item.purchased && 'bg-success/5')}
+      >
+        <span
+          className={cn(
+            'flex size-11 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+            item.purchased ? 'border-success bg-success text-success-foreground' : 'border-input',
+          )}
+          aria-hidden
+        >
+          {item.purchased ? <Check className="size-6" strokeWidth={3} /> : null}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className={cn('block text-base font-medium leading-tight', item.purchased && 'text-muted-foreground line-through')}>{item.name}</span>
+          <span className="tabular block text-sm text-muted-foreground">
+            {formatAmount(item.shoppingQty, item.shoppingUnit)}
+            {packs ? ` · ${packs}` : ''}
+          </span>
+        </span>
+        {item.purchased && lastToggled === item.id ? (
+          <span className="flex items-center gap-1 text-sm font-semibold text-primary">
+            <Undo2 className="size-4" aria-hidden />
+            Undo
+          </span>
+        ) : null}
+      </button>
+    );
+  };
+
   return (
     <div className="space-y-3">
-      {/* Sticky control bar ------------------------------------------------ */}
-      <div className="sticky top-[57px] z-20 -mx-4 space-y-2 border-b border-border bg-background/95 px-4 py-2 backdrop-blur-sm">
-        <div className="flex items-center gap-3">
-          <div className="flex-1">
+      {/*
+        Sticks to the very top (the page header on this route does not stick),
+        so the offset never has to match the header's height, which changes
+        with the safe-area inset in standalone mode on a phone.
+      */}
+      <div className="sticky top-0 z-20 -mx-4 -mt-4 space-y-2 border-b border-border bg-background/95 px-4 py-2 pt-[calc(0.5rem+env(safe-area-inset-top))] backdrop-blur-sm">
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1" aria-live="polite">
             <p className="tabular text-2xl font-bold leading-none">{remaining}</p>
             <p className="text-xs text-muted-foreground">
-              left of {total} · {total - remaining} in the trolley
+              {remaining === 1 ? 'item' : 'items'} remaining · {total - remaining} in the trolley
             </p>
           </div>
-
-          {lastToggled ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const item = items.find((i) => i.id === lastToggled);
-                if (item) toggle(item, false);
-              }}
-            >
-              <Undo2 className="size-4" />
-              Undo
-            </Button>
-          ) : null}
-
+          <SegmentedControl
+            aria-label="Show"
+            size="sm"
+            className="w-40 shrink-0"
+            value={view}
+            onChange={(v) => setView(v as typeof view)}
+            options={[
+              { value: 'remaining', label: 'Remaining' },
+              { value: 'all', label: 'All' },
+            ]}
+          />
+          <Button variant="outline" size="icon" aria-label="Search the list" aria-pressed={searching} onClick={() => setSearching((s) => !s)}>
+            <Search className="size-5" />
+          </Button>
           <Button variant="outline" size="icon" aria-label="Add an item" onClick={() => setAdding(true)}>
             <Plus className="size-5" />
           </Button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        {searching ? (
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
             <Input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search the list"
-              className="h-10 pl-9 pr-9"
+              className="h-11 pl-9 pr-9"
               aria-label="Search the list"
+              autoFocus
             />
             {query ? (
               <button
                 type="button"
                 aria-label="Clear search"
                 onClick={() => setQuery('')}
-                className="absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground"
+                className="absolute right-1 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground"
               >
                 <X className="size-4" />
               </button>
             ) : null}
           </div>
-
-          <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-            Hide done
-            <Switch checked={hideDone} onCheckedChange={setHideDone} aria-label="Hide items already bought" />
-          </label>
-        </div>
+        ) : null}
       </div>
 
-      {/* Item rows --------------------------------------------------------- */}
       {groups.length === 0 ? (
         <Card className="p-8 text-center">
-          <Check className="mx-auto size-8 text-success" />
-          <p className="mt-2 font-medium">
-            {query ? 'Nothing matches that search' : 'Everything is in the trolley'}
-          </p>
-          {!query ? (
-            <Button variant="outline" size="sm" className="mt-3" onClick={() => setHideDone(false)}>
-              Show what I bought
-            </Button>
-          ) : null}
+          <Check className="mx-auto size-8 text-success" aria-hidden />
+          <p className="mt-2 font-medium">{needle ? 'Nothing matches that search' : 'Everything is in the trolley'}</p>
         </Card>
       ) : (
         groups.map((group) => (
           <section key={group.department} className="space-y-1.5">
             <h2 className="px-1 text-sm font-semibold">{group.department}</h2>
-            <Card className="divide-y divide-border overflow-hidden">
-              {group.lines.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => toggle(item, !item.purchased)}
-                  className={cn(
-                    'flex w-full items-center gap-4 p-4 text-left transition-colors active:bg-accent',
-                    item.purchased && 'bg-success/5',
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'flex size-11 shrink-0 items-center justify-center rounded-xl border-2 transition-colors',
-                      item.purchased
-                        ? 'border-success bg-success text-success-foreground'
-                        : 'border-input',
-                    )}
-                    aria-hidden
-                  >
-                    {item.purchased ? <Check className="size-6" strokeWidth={3} /> : null}
-                  </span>
-
-                  <span className="min-w-0 flex-1">
-                    <span
-                      className={cn(
-                        'block text-base font-medium leading-tight',
-                        item.purchased && 'text-muted-foreground line-through',
-                      )}
-                    >
-                      {item.name}
-                    </span>
-                    <span className="tabular block text-sm text-muted-foreground">
-                      {formatAmount(item.shoppingQty, item.shoppingUnit)}
-                      {item.estimatedPackages != null && item.packageSize && item.packageUnit
-                        ? ` · ${item.estimatedPackages} × ${formatAmount(item.packageSize, item.packageUnit)}`
-                        : ''}
-                    </span>
-                  </span>
-                </button>
-              ))}
-            </Card>
+            <Card className="divide-y divide-border overflow-hidden">{group.lines.map(row)}</Card>
           </section>
         ))
       )}
+
+      {view === 'remaining' && trolleyItems.length > 0 ? (
+        <section className="space-y-1.5">
+          <button
+            type="button"
+            aria-expanded={trolleyOpen}
+            onClick={() => setTrolleyOpen((o) => !o)}
+            className="flex min-h-11 w-full items-center gap-2 px-1 text-sm font-semibold text-muted-foreground"
+          >
+            <span className="flex-1 text-left">In the trolley · {trolleyItems.length}</span>
+            {trolleyOpen ? <ChevronDown className="size-4" aria-hidden /> : <ChevronRight className="size-4" aria-hidden />}
+          </button>
+          {trolleyOpen ? <Card className="divide-y divide-border overflow-hidden">{trolleyItems.map(row)}</Card> : null}
+        </section>
+      ) : null}
 
       <AdHocSheet
         groceryWeekId={groceryWeekId}
@@ -251,7 +241,18 @@ function AdHocSheet({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="adhoc-unit">Unit</Label>
-              <Select id="adhoc-unit" value={unit} onChange={(e) => setUnit(e.target.value)} />
+              <select
+                id="adhoc-unit"
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+                className="flex h-12 w-full rounded-lg border border-input bg-background px-3 text-base shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {UNIT_DEFINITIONS.map((u) => (
+                  <option key={u.key} value={u.key}>
+                    {u.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
@@ -279,31 +280,5 @@ function AdHocSheet({
         </SheetFooter>
       </SheetContent>
     </Sheet>
-  );
-}
-
-/** Small local select so the ad hoc sheet stays self-contained. */
-function Select({
-  id,
-  value,
-  onChange,
-}: {
-  id: string;
-  value: string;
-  onChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
-}) {
-  return (
-    <select
-      id={id}
-      value={value}
-      onChange={onChange}
-      className="flex h-12 w-full rounded-lg border border-input bg-background px-3 text-base shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      {UNIT_DEFINITIONS.map((u) => (
-        <option key={u.key} value={u.key}>
-          {u.label}
-        </option>
-      ))}
-    </select>
   );
 }

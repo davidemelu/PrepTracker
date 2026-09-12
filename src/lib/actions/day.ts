@@ -356,19 +356,36 @@ export async function updateDayNotes(input: { date: string; notes?: string }): P
   });
 }
 
-const dayTypeSchema = z.object({ date: dayKey, dayTypeId: cuid });
+const dayTypeSchema = z.object({
+  date: dayKey,
+  dayTypeId: cuid,
+  /**
+   * Meals already eaten or skipped keep the portions they were logged with.
+   * The default, because a switch at 4 pm should never rewrite breakfast.
+   * Pass false to re-portion every meal, including the logged ones.
+   */
+  keepLoggedMeals: z.boolean().optional(),
+});
 
 /** Override the day type for one date, rebuilding the day from the plan. */
-export async function setDayType(input: { date: string; dayTypeId: string }): Promise<ActionResult<undefined>> {
-  return runAction(dayTypeSchema, input, async ({ date, dayTypeId }) => {
+export async function setDayType(input: {
+  date: string;
+  dayTypeId: string;
+  keepLoggedMeals?: boolean;
+}): Promise<ActionResult<undefined>> {
+  return runAction(dayTypeSchema, input, async ({ date, dayTypeId, keepLoggedMeals }) => {
     const userId = await requireUserId();
 
     const dayType = await prisma.dayType.findFirst({ where: { id: dayTypeId, userId } });
     if (!dayType) return fail('That day type could not be found.');
 
-    await ensureDailyPlan(userId, date, { dayTypeId, regenerate: true });
+    await ensureDailyPlan(userId, date, {
+      dayTypeId,
+      regenerate: true,
+      keepLoggedMeals: keepLoggedMeals ?? true,
+    });
     revalidateDay(date);
-    return ok(undefined, `Switched to a ${dayType.name.toLowerCase()} day.`);
+    return ok(undefined);
   });
 }
 

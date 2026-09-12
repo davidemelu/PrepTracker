@@ -11,23 +11,22 @@ const OPTIONS = [
   { value: 'system', label: 'System', icon: Monitor },
 ] as const;
 
+/** Labelled segmented theme control. Lives in Settings → Appearance. */
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
 
   // The server cannot know the resolved theme, so the control renders only after
-  // hydration rather than flashing the wrong selection. useSyncExternalStore
-  // gives a different value on the server and the client without the
-  // setState-in-an-effect pattern.
+  // hydration rather than flashing the wrong selection.
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,
     () => false,
   );
 
-  if (!mounted) return <div className="h-9 w-28" aria-hidden />;
+  if (!mounted) return <div className="h-12 w-full rounded-full bg-muted" aria-hidden />;
 
   return (
-    <div role="radiogroup" aria-label="Theme" className="flex gap-0.5 rounded-lg bg-muted p-0.5">
+    <div role="radiogroup" aria-label="Theme" className="flex h-12 gap-1 rounded-full bg-muted p-1">
       {OPTIONS.map((option) => {
         const Icon = option.icon;
         const active = theme === option.value;
@@ -37,14 +36,14 @@ export function ThemeToggle() {
             type="button"
             role="radio"
             aria-checked={active}
-            aria-label={option.label}
             onClick={() => setTheme(option.value)}
             className={cn(
-              'flex size-9 items-center justify-center rounded-md transition-colors',
+              'flex flex-1 items-center justify-center gap-1.5 rounded-full text-sm font-semibold transition-colors',
               active ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground',
             )}
           >
-            <Icon className="size-4" />
+            <Icon className="size-4" aria-hidden />
+            {option.label}
           </button>
         );
       })}

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ChefHat, ChevronRight, Percent, Refrigerator, Snowflake } from 'lucide-react';
+import { ChefHat, ChevronRight, Percent, Play, Refrigerator, Snowflake, Sun } from 'lucide-react';
 import { requireUser } from '@/lib/auth/guards';
 import { prisma } from '@/lib/db';
 import { fromDbDate, relativeDayLabel, todayKey } from '@/lib/domain/dates';
@@ -9,18 +9,54 @@ import { suggestDayTypeCounts } from '@/lib/server/grocery-service';
 import { PageBody, PageHeader, SectionTitle } from '@/components/layout/page-header';
 import { NewSessionSheet } from '@/components/prep/new-session-sheet';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { cn } from '@/lib/utils';
 
 export const metadata = { title: 'Prep' };
 export const dynamic = 'force-dynamic';
 
-const STATUS_VARIANT = {
-  PLANNED: 'secondary',
-  IN_PROGRESS: 'default',
-  COMPLETED: 'success',
-} as const;
+const STATUS_LABEL = { PLANNED: 'Planned', IN_PROGRESS: 'In progress', COMPLETED: 'Done' } as const;
+const STATUS_VARIANT = { PLANNED: 'secondary', IN_PROGRESS: 'default', COMPLETED: 'success' } as const;
 
+function Tile({
+  icon: Icon,
+  label,
+  value,
+  href,
+  warn = false,
+}: {
+  icon: typeof Refrigerator;
+  label: string;
+  value: number;
+  href: string;
+  warn?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        'flex min-h-24 flex-1 flex-col justify-between rounded-xl border bg-card p-3 shadow-sm',
+        warn ? 'border-warning/50 bg-warning/10' : 'border-border',
+      )}
+    >
+      <span className={cn('flex items-center gap-1 text-xs font-semibold uppercase tracking-wide', warn ? 'text-warning' : 'text-muted-foreground')}>
+        <Icon className="size-3.5" aria-hidden />
+        {label}
+      </span>
+      <span>
+        <span className={cn('tabular block text-[28px] font-semibold leading-8', warn && 'text-warning')}>{value}</span>
+        <span className={cn('text-xs', warn ? 'text-warning' : 'text-muted-foreground')}>portions</span>
+      </span>
+    </Link>
+  );
+}
+
+/**
+ * Prep opens on what is in storage right now and the session you are in the
+ * middle of. Past sessions and yield settings sit underneath.
+ */
 export default async function PrepPage() {
   const user = await requireUser();
   const today = todayKey();
@@ -32,7 +68,7 @@ export default async function PrepPage() {
       orderBy: { date: 'desc' },
       take: 20,
       include: {
-        _count: { select: { batches: true, tasks: true } },
+        batches: { select: { cookedWeightG: true, _count: { select: { storagePortions: true } } } },
         tasks: { select: { done: true } },
       },
     }),
@@ -54,110 +90,108 @@ export default async function PrepPage() {
   }));
 
   const summary = summariseStorage(portionLikes, today);
-  const actions = storageActions(portionLikes, today).slice(0, 3);
+  const actions = storageActions(portionLikes, today);
+  const moveNow = actions.filter((a) => a.kind === 'MOVE_TO_FRIDGE');
+  const thawTonight = moveNow.reduce((sum, a) => sum + a.portion.portions, 0);
+
+  const current = sessions.find((s) => s.status !== 'COMPLETED') ?? null;
+  const past = sessions.filter((s) => s.id !== current?.id);
+
+  const describe = (session: (typeof sessions)[number]) => {
+    const cooked = session.batches.filter((b) => b.cookedWeightG != null).length;
+    const done = session.tasks.filter((t) => t.done).length;
+    return `${cooked} of ${session.batches.length} cooked · ${done} of ${session.tasks.length} tasks`;
+  };
 
   return (
     <>
-      <PageHeader
-        title="Prep"
-        subtitle="Batch cooking, yields and storage"
-        action={<NewSessionSheet dayTypes={dayTypeCounts} />}
-      />
+      <PageHeader title="Prep" action={current ? <NewSessionSheet dayTypes={dayTypeCounts} /> : null} />
 
       <PageBody>
-        {/* Storage snapshot ---------------------------------------------- */}
-        <Link href="/prep/storage" className="block">
-          <Card className="p-4 transition-colors hover:bg-accent/40">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="font-semibold">Storage</h2>
-              <ChevronRight className="size-5 text-muted-foreground" />
-            </div>
-
-            <div className="mt-2 grid grid-cols-3 gap-2 text-center">
-              <div>
-                <p className="tabular text-xl font-bold">{summary.fridgePortions}</p>
-                <p className="text-xs text-muted-foreground">
-                  <Refrigerator className="mr-0.5 inline size-3" />
-                  fridge
-                </p>
-              </div>
-              <div>
-                <p className="tabular text-xl font-bold">{summary.freezerPortions}</p>
-                <p className="text-xs text-muted-foreground">
-                  <Snowflake className="mr-0.5 inline size-3" />
-                  freezer
-                </p>
-              </div>
-              <div>
-                <p className="tabular text-xl font-bold">{summary.thawingPortions}</p>
-                <p className="text-xs text-muted-foreground">thawing</p>
-              </div>
-            </div>
-
-            {actions.length > 0 ? (
-              <ul className="mt-3 space-y-1 border-t border-border pt-2">
-                {actions.map((action) => (
-                  <li key={action.portion.id} className="text-sm text-muted-foreground">
-                    {action.message}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </Card>
-        </Link>
-
-        <Link href="/prep/yields" className="block">
-          <Card className="flex items-center gap-3 p-4 transition-colors hover:bg-accent/40">
-            <Percent className="size-5 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 flex-1">
-              <span className="block font-medium leading-tight">Cooking yields</span>
-              <span className="block text-xs text-muted-foreground">
-                Raw-to-cooked conversion, improved by what you actually measure
-              </span>
-            </span>
-            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-          </Card>
-        </Link>
-
-        {/* Sessions -------------------------------------------------------- */}
         <section className="space-y-2">
-          <SectionTitle>Prep sessions</SectionTitle>
+          <SectionTitle>Storage</SectionTitle>
+          <div className="flex gap-2">
+            <Tile icon={Refrigerator} label="Ready" value={summary.fridgePortions} href="/prep/storage" />
+            <Tile icon={Snowflake} label="Freezer" value={summary.freezerPortions} href="/prep/storage" />
+            <Tile icon={Sun} label="Thaw tonight" value={thawTonight} href="/prep/storage" warn={thawTonight > 0} />
+          </div>
+          {moveNow.length > 0 ? (
+            <Link
+              href="/prep/storage"
+              className="flex min-h-11 items-center gap-2 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning"
+            >
+              <Snowflake className="size-4 shrink-0" aria-hidden />
+              <span className="flex-1">{moveNow[0]!.message}{moveNow.length > 1 ? ` and ${moveNow.length - 1} more` : ''}</span>
+              <ChevronRight className="size-4 shrink-0" aria-hidden />
+            </Link>
+          ) : null}
+        </section>
 
-          {sessions.length === 0 ? (
+        <section className="space-y-2">
+          <SectionTitle>Prep session</SectionTitle>
+          {current ? (
+            <Card className="space-y-3 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <h2 className="truncate text-[17px] font-semibold">{current.name}</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {relativeDayLabel(fromDbDate(current.date), today)} · {current.daysCovered} days of food
+                  </p>
+                </div>
+                <Badge variant={STATUS_VARIANT[current.status]}>{STATUS_LABEL[current.status]}</Badge>
+              </div>
+              <p className="tabular text-sm">{describe(current)}</p>
+              <Button asChild size="hero">
+                <Link href={`/prep/${current.id}`}>
+                  <Play className="size-5" />
+                  {current.status === 'PLANNED' ? 'Start prep' : 'Continue prep'}
+                </Link>
+              </Button>
+            </Card>
+          ) : (
             <EmptyState
               icon={ChefHat}
-              title="No prep sessions yet"
-              description="Create one and PrepTracker works out how much of each food to cook, how much raw meat to start with, and how many portions you will get."
+              title="No prep session this week."
+              description="PrepTracker works out how much of each food to cook and how many portions you will get."
+              action={<NewSessionSheet dayTypes={dayTypeCounts} triggerLabel="Plan a prep session" triggerVariant="default" triggerSize="default" />}
             />
-          ) : (
-            sessions.map((session) => {
-              const doneTasks = session.tasks.filter((t) => t.done).length;
-              return (
-                <Link key={session.id} href={`/prep/${session.id}`} className="block">
-                  <Card className="p-4 transition-colors hover:bg-accent/40">
-                    <div className="flex items-start gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <h3 className="font-semibold leading-tight">{session.name}</h3>
-                          <Badge variant={STATUS_VARIANT[session.status]}>
-                            {session.status === 'IN_PROGRESS'
-                              ? 'In progress'
-                              : session.status.charAt(0) + session.status.slice(1).toLowerCase()}
-                          </Badge>
-                        </div>
-                        <p className="mt-0.5 text-sm text-muted-foreground">
-                          {relativeDayLabel(fromDbDate(session.date), today)} · {session.daysCovered} days ·{' '}
-                          {session._count.batches} to cook · {doneTasks}/{session._count.tasks} tasks
-                        </p>
-                      </div>
-                      <ChevronRight className="mt-1 size-5 shrink-0 text-muted-foreground" />
-                    </div>
-                  </Card>
-                </Link>
-              );
-            })
           )}
         </section>
+
+        <Link href="/prep/yields" className="block">
+          <Card className="flex min-h-14 items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/40">
+            <Percent className="size-5 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="min-w-0 flex-1">
+              <span className="block font-medium leading-tight">Cooking yields</span>
+              <span className="block text-xs text-muted-foreground">Raw to cooked, improved by what you weigh</span>
+            </span>
+            <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+          </Card>
+        </Link>
+
+        {past.length > 0 ? (
+          <section className="space-y-2">
+            <SectionTitle>Past sessions</SectionTitle>
+            <Card className="divide-y divide-border">
+              {past.map((session) => (
+                <Link
+                  key={session.id}
+                  href={`/prep/${session.id}`}
+                  className="flex min-h-14 items-center gap-3 px-4 py-2 transition-colors first:rounded-t-xl last:rounded-b-xl hover:bg-accent/40"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium leading-tight">{session.name}</span>
+                    <span className="tabular block text-xs text-muted-foreground">
+                      {relativeDayLabel(fromDbDate(session.date), today)} · {describe(session)}
+                    </span>
+                  </span>
+                  <Badge variant={STATUS_VARIANT[session.status]}>{STATUS_LABEL[session.status]}</Badge>
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                </Link>
+              ))}
+            </Card>
+          </section>
+        ) : null}
       </PageBody>
     </>
   );

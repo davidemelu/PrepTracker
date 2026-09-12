@@ -95,6 +95,36 @@ export async function undoSupplement(input: {
   });
 }
 
+/** Marks a specific set of pending doses as taken, e.g. one timing group. */
+const someDosesSchema = z.object({ dailySupplementIds: z.array(cuid).min(1).max(50) });
+
+export async function completeSupplements(input: {
+  dailySupplementIds: string[];
+}): Promise<ActionResult<{ count: number }>> {
+  return runAction(someDosesSchema, input, async ({ dailySupplementIds }) => {
+    const userId = await requireUserId();
+    const pending = await prisma.dailySupplement.findMany({
+      where: { id: { in: dailySupplementIds }, status: 'PENDING', dailyPlan: { userId } },
+      select: { id: true },
+    });
+    if (pending.length === 0) return ok({ count: 0 });
+
+    const ids = pending.map((p) => p.id);
+    await prisma.$transaction([
+      prisma.dailySupplement.updateMany({
+        where: { id: { in: ids } },
+        data: { status: 'COMPLETED', completedAt: new Date() },
+      }),
+      prisma.supplementCompletion.createMany({
+        data: ids.map((dailySupplementId) => ({ dailySupplementId, action: 'COMPLETED' as const })),
+      }),
+    ]);
+
+    revalidateSupplements();
+    return ok({ count: ids.length });
+  });
+}
+
 /** Marks every pending dose for the day as taken. */
 const allDosesSchema = z.object({ dailyPlanId: cuid });
 

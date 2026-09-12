@@ -16,18 +16,23 @@ const buttonVariants = cva(
         destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
         outline: 'border border-border bg-background hover:bg-accent hover:text-accent-foreground',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+        /** Primary tint: the quick actions that sit next to a hero button. */
+        tonal: 'bg-primary/10 text-primary hover:bg-primary/15',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         success: 'bg-success text-success-foreground hover:bg-success/90',
         link: 'text-primary underline-offset-4 hover:underline',
       },
       size: {
         default: 'h-11 px-4 py-2',
-        sm: 'h-9 rounded-md px-3 text-sm',
+        /** Compact label, still a 44px target. */
+        sm: 'h-11 rounded-md px-3 text-sm',
         lg: 'h-13 rounded-xl px-6 text-base',
-        /** Full-width primary action, e.g. "Complete meal". */
+        /** Full-width primary action, e.g. "Save". */
         block: 'h-12 w-full rounded-xl px-4 text-base',
+        /** The three daily actions: Mark eaten and the two water buttons. */
+        hero: 'h-13 w-full rounded-xl px-4 text-base',
         icon: 'size-11',
-        'icon-sm': 'size-9',
+        'icon-sm': 'size-11',
         'icon-lg': 'size-14',
       },
     },

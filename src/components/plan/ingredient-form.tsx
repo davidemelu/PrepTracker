@@ -2,11 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Trash2 } from 'lucide-react';
 import { deleteIngredient, saveIngredient } from '@/lib/actions/plan';
 import { UNIT_DEFINITIONS } from '@/lib/domain/units';
 import { useAction } from '@/lib/hooks/use-action';
 import { Button } from '@/components/ui/button';
+import { DeleteButton } from '@/components/ui/delete-button';
 import { Input, NumberInput } from '@/components/ui/input';
 import { Label, Switch } from '@/components/ui/primitives';
 import { Select } from '@/components/ui/select';
@@ -48,8 +48,8 @@ const STATES = [
 ] as const;
 
 /**
- * One ingredient line. The quantity is entered once per day type, which is what
- * makes training/rest differences work for any number of custom day types.
+ * One ingredient line: what it is, how much on each day type, then the rarely
+ * changed details behind a disclosure.
  */
 export function IngredientForm({
   mealId,
@@ -79,8 +79,7 @@ export function IngredientForm({
     state: initial?.state ?? 'AS_IS',
     required: initial?.required ?? true,
     notes: initial?.notes ?? '',
-    quantities:
-      initial?.quantities ?? Object.fromEntries(dayTypes.map((d) => [d.id, '0'])),
+    quantities: initial?.quantities ?? Object.fromEntries(dayTypes.map((d) => [d.id, '0'])),
   });
 
   const save = useAction(saveIngredient, {
@@ -125,6 +124,11 @@ export function IngredientForm({
       ),
     } as unknown as Parameters<typeof saveIngredient>[0]);
 
+  const chosenName =
+    values.source === 'food'
+      ? (foods.find((f) => f.id === values.foodId)?.name ?? 'this ingredient')
+      : (groups.find((g) => g.id === values.optionGroupId)?.name ?? 'this ingredient');
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted p-1">
@@ -133,7 +137,7 @@ export function IngredientForm({
             key={source}
             type="button"
             onClick={() => set('source', source)}
-            className={`h-10 rounded-md text-sm font-medium transition-colors ${
+            className={`h-11 rounded-md text-sm font-medium transition-colors ${
               values.source === source ? 'bg-background shadow-sm' : 'text-muted-foreground'
             }`}
           >
@@ -153,18 +157,12 @@ export function IngredientForm({
               </option>
             ))}
           </Select>
-          {save.fieldErrors.foodId ? (
-            <p className="text-sm text-destructive">{save.fieldErrors.foodId[0]}</p>
-          ) : null}
+          {save.fieldErrors.foodId ? <p className="text-sm text-destructive">{save.fieldErrors.foodId[0]}</p> : null}
         </div>
       ) : (
         <div className="space-y-1.5">
           <Label htmlFor="ing-group">Substitution group</Label>
-          <Select
-            id="ing-group"
-            value={values.optionGroupId}
-            onChange={(e) => set('optionGroupId', e.target.value)}
-          >
+          <Select id="ing-group" value={values.optionGroupId} onChange={(e) => set('optionGroupId', e.target.value)}>
             <option value="">Choose a group…</option>
             {groups.map((group) => (
               <option key={group.id} value={group.id}>
@@ -172,48 +170,12 @@ export function IngredientForm({
               </option>
             ))}
           </Select>
-          <p className="text-xs text-muted-foreground">
-            You pick which one you actually want under Plan → Substitutions, or on the day itself.
-          </p>
+          <p className="text-xs text-muted-foreground">Pick which one you want under Plan → Substitutions, or on the day itself.</p>
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="ing-unit">Unit</Label>
-          <Select id="ing-unit" value={values.unit} onChange={(e) => set('unit', e.target.value)}>
-            {UNIT_DEFINITIONS.map((unit) => (
-              <option key={unit.key} value={unit.key}>
-                {unit.label}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="ing-state">Weighed</Label>
-          <Select
-            id="ing-state"
-            value={values.state}
-            onChange={(e) => set('state', e.target.value as IngredientFormValues['state'])}
-          >
-            {STATES.map((state) => (
-              <option key={state.value} value={state.value}>
-                {state.label}
-              </option>
-            ))}
-          </Select>
-        </div>
-      </div>
-
-      {values.state === 'COOKED' ? (
-        <p className="rounded-lg bg-muted p-2.5 text-xs text-muted-foreground">
-          Cooked weights are converted to raw amounts on the grocery list using the food&apos;s cooking
-          yield.
-        </p>
-      ) : null}
-
       <fieldset className="space-y-2">
-        <legend className="mb-1 text-sm font-medium">Quantity per day type</legend>
+        <legend className="mb-1 text-sm font-medium">Amount per day type</legend>
         <div className="space-y-2">
           {dayTypes.map((dayType) => (
             <div key={dayType.id} className="flex items-center gap-3">
@@ -223,49 +185,72 @@ export function IngredientForm({
               <NumberInput
                 id={`qty-${dayType.id}`}
                 value={values.quantities[dayType.id] ?? '0'}
-                onChange={(e) =>
-                  set('quantities', { ...values.quantities, [dayType.id]: e.target.value })
-                }
+                onChange={(e) => set('quantities', { ...values.quantities, [dayType.id]: e.target.value })}
               />
               <span className="w-10 shrink-0 text-sm text-muted-foreground">{values.unit}</span>
             </div>
           ))}
         </div>
-        <p className="text-xs text-muted-foreground">
-          Set a quantity to 0 to leave this food out on that day type. The line stays in the plan.
-        </p>
+        <p className="text-xs text-muted-foreground">Set 0 to leave this food out on that day type. The line stays in the plan.</p>
       </fieldset>
 
-      <label className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-        <span className="text-sm">
-          Required
-          <span className="block text-xs text-muted-foreground">
-            Optional items can be excluded from the grocery list.
-          </span>
-        </span>
-        <Switch checked={values.required} onCheckedChange={(checked) => set('required', checked)} />
-      </label>
+      <details className="rounded-lg border border-border">
+        <summary className="cursor-pointer list-none px-3 py-3 text-sm font-medium">
+          More: unit, weighed state, optional, note
+        </summary>
+        <div className="space-y-4 px-3 pb-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="ing-unit">Unit</Label>
+              <Select id="ing-unit" value={values.unit} onChange={(e) => set('unit', e.target.value)}>
+                {UNIT_DEFINITIONS.map((unit) => (
+                  <option key={unit.key} value={unit.key}>
+                    {unit.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ing-state">Weighed</Label>
+              <Select id="ing-state" value={values.state} onChange={(e) => set('state', e.target.value as IngredientFormValues['state'])}>
+                {STATES.map((state) => (
+                  <option key={state.value} value={state.value}>
+                    {state.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
+          {values.state === 'COOKED' ? (
+            <p className="rounded-lg bg-muted p-2.5 text-xs text-muted-foreground">
+              Cooked weights are converted to raw amounts on the grocery list using the food&apos;s cooking yield.
+            </p>
+          ) : null}
 
-      <div className="space-y-1.5">
-        <Label htmlFor="ing-notes">Note</Label>
-        <Input
-          id="ing-notes"
-          value={values.notes}
-          onChange={(e) => set('notes', e.target.value)}
-          placeholder="Seasoning with each meal"
-        />
-      </div>
+          <label className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-border px-3">
+            <span className="text-sm">
+              Required
+              <span className="block text-xs text-muted-foreground">Optional items can be left off the grocery list.</span>
+            </span>
+            <Switch checked={values.required} onCheckedChange={(checked) => set('required', checked)} />
+          </label>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="ing-notes">Note</Label>
+            <Input id="ing-notes" value={values.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Seasoning with each meal" />
+          </div>
+        </div>
+      </details>
 
       {values.id ? (
-        <Button
-          variant="ghost"
-          className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
-          disabled={remove.isPending}
-          onClick={() => remove.run({ id: values.id! })}
-        >
-          <Trash2 className="size-4" />
-          Remove ingredient
-        </Button>
+        <DeleteButton
+          label="Remove ingredient"
+          title={`Remove ${chosenName} from this meal?`}
+          description="Removes it from the plan. Days you have already logged keep their record."
+          pending={remove.isPending}
+          onConfirm={() => remove.run({ id: values.id! })}
+          className="w-full"
+        />
       ) : null}
 
       {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}

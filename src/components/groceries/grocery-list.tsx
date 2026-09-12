@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, Info, PackagePlus, Pencil, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, ChevronRight, Plus } from 'lucide-react';
 import {
   deleteGroceryItem,
   saveGroceryItem,
@@ -16,6 +17,7 @@ import { useAction } from '@/lib/hooks/use-action';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { DeleteButton } from '@/components/ui/delete-button';
 import { Input, NumberInput, Textarea } from '@/components/ui/input';
 import { Checkbox, Label } from '@/components/ui/primitives';
 import { Select } from '@/components/ui/select';
@@ -43,6 +45,13 @@ export interface GroceryItemRow {
   purchased: boolean;
   isAdHoc: boolean;
   notes: string | null;
+}
+
+/** "4 packs of 1 kg" — words, not "4 × 1 kg". */
+export function packsLabel(item: Pick<GroceryItemRow, 'estimatedPackages' | 'packageSize' | 'packageUnit'>): string | null {
+  if (item.estimatedPackages == null || !item.packageSize || !item.packageUnit) return null;
+  const n = item.estimatedPackages;
+  return `${n} pack${n === 1 ? '' : 's'} of ${formatAmount(item.packageSize, item.packageUnit)}`;
 }
 
 function ItemForm({
@@ -99,11 +108,7 @@ function ItemForm({
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label htmlFor="gi-category">Category</Label>
-          <Select
-            id="gi-category"
-            value={category}
-            onChange={(e) => setCategory(e.target.value as FoodCategoryKey)}
-          >
+          <Select id="gi-category" value={category} onChange={(e) => setCategory(e.target.value as FoodCategoryKey)}>
             {CATEGORY_ORDER.map((c) => (
               <option key={c} value={c}>
                 {CATEGORY_LABELS[c]}
@@ -113,35 +118,24 @@ function ItemForm({
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="gi-department">Department</Label>
-          <Input
-            id="gi-department"
-            value={department}
-            onChange={(e) => setDepartment(e.target.value)}
-            placeholder="Produce"
-          />
+          <Input id="gi-department" value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="Produce" />
         </div>
       </div>
 
       <div className="space-y-1.5">
         <Label htmlFor="gi-notes">Notes</Label>
-        <Textarea
-          id="gi-notes"
-          className="min-h-16"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-        />
+        <Textarea id="gi-notes" className="min-h-16" value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
 
       {initial ? (
-        <Button
-          variant="ghost"
-          className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
-          disabled={remove.isPending}
-          onClick={() => remove.run({ id: initial.id })}
-        >
-          <Trash2 className="size-4" />
-          Remove from list
-        </Button>
+        <DeleteButton
+          label="Remove from list"
+          title={`Remove ${initial.name}?`}
+          description="Only this week's list changes. Your plan and inventory are untouched."
+          pending={remove.isPending}
+          onConfirm={() => remove.run({ id: initial.id })}
+          className="w-full"
+        />
       ) : null}
 
       {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
@@ -174,18 +168,14 @@ function ItemForm({
 }
 
 /**
- * The planning view of a list: shows what the plan needs, what to buy, and why
- * the two differ (cooked-to-raw conversion, inventory already at home).
+ * The planning view of a list. Each row says what to buy on one line; the
+ * reasons (cooked-to-raw conversion, inventory already at home) and the edit
+ * actions live in a sheet, so the list itself stays scannable.
  */
-export function GroceryList({
-  groceryWeekId,
-  items,
-}: {
-  groceryWeekId: string;
-  items: GroceryItemRow[];
-}) {
+export function GroceryList({ groceryWeekId, items }: { groceryWeekId: string; items: GroceryItemRow[] }) {
   const router = useRouter();
-  const [editing, setEditing] = useState<GroceryItemRow | null>(null);
+  const [selected, setSelected] = useState<GroceryItemRow | null>(null);
+  const [mode, setMode] = useState<'detail' | 'edit'>('detail');
   const [adding, setAdding] = useState(false);
 
   const purchased = useAction(togglePurchased, { successToast: false, onSuccess: () => router.refresh() });
@@ -204,14 +194,28 @@ export function GroceryList({
     }));
   }, [items]);
 
+  // Keep the sheet's item in sync after a refresh.
+  const current = selected ? (items.find((i) => i.id === selected.id) ?? selected) : null;
+  const missingYield = items.some((i) => i.rawQty != null && i.yieldPctUsed == null);
+
+  const open = (item: GroceryItemRow) => {
+    setSelected(item);
+    setMode('detail');
+  };
+  const close = () => setSelected(null);
+
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
-          <Plus className="size-4" />
-          Add item
-        </Button>
-      </div>
+      {missingYield ? (
+        <Link
+          href="/prep/yields"
+          className="flex min-h-11 items-center gap-2 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning"
+        >
+          <AlertTriangle className="size-4 shrink-0" aria-hidden />
+          <span className="flex-1">Some items have no cooking yield, so they show the cooked weight. Set yields.</span>
+          <ChevronRight className="size-4 shrink-0" aria-hidden />
+        </Link>
+      ) : null}
 
       {grouped.map((group) => (
         <section key={group.category} className="space-y-2">
@@ -222,91 +226,30 @@ export function GroceryList({
           <Card className="divide-y divide-border">
             {group.items.map((item) => {
               const done = item.purchased || item.haveAlready;
+              const packs = packsLabel(item);
               return (
-                <div key={item.id} className={cn('p-3', done && 'opacity-60')}>
-                  <div className="flex items-start gap-3">
-                    <Checkbox
-                      size="lg"
-                      className="mt-0.5"
-                      checked={item.purchased}
-                      disabled={purchased.isPending}
-                      onCheckedChange={(checked) =>
-                        purchased.run({ id: item.id, value: checked === true })
-                      }
-                      aria-label={`Mark ${item.name} as bought`}
-                    />
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className={cn('font-medium leading-tight', done && 'line-through')}>
-                          {item.name}
-                        </span>
-                        {item.isAdHoc ? <Badge variant="outline">Added</Badge> : null}
+                <div key={item.id} className="flex min-h-14 items-center gap-3 pl-3 pr-2">
+                  <Checkbox
+                    size="lg"
+                    checked={item.purchased}
+                    disabled={purchased.isPending}
+                    onCheckedChange={(checked) => purchased.run({ id: item.id, value: checked === true })}
+                    aria-label={`Mark ${item.name} as bought`}
+                  />
+                  <button type="button" onClick={() => open(item)} className="flex min-h-14 min-w-0 flex-1 items-center gap-3 py-2 text-left">
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <span className={cn('font-medium leading-tight', done && 'text-muted-foreground line-through')}>{item.name}</span>
                         {item.haveAlready ? <Badge variant="secondary">Have it</Badge> : null}
-                      </div>
-
-                      <p className="tabular text-sm">
-                        Buy{' '}
-                        <span className="font-semibold">
-                          {formatAmount(item.shoppingQty, item.shoppingUnit)}
-                        </span>
-                        {item.estimatedPackages != null && item.packageSize && item.packageUnit ? (
-                          <span className="text-muted-foreground">
-                            {' '}
-                            · {item.estimatedPackages} ×{' '}
-                            {formatAmount(item.packageSize, item.packageUnit)} pack
-                            {item.estimatedPackages === 1 ? '' : 's'}
-                          </span>
-                        ) : null}
-                      </p>
-
-                      {item.cookedQty != null ? (
-                        <p className="text-xs text-muted-foreground">
-                          Plan needs {formatAmount(item.cookedQty, item.requiredUnit)} cooked
-                          {item.yieldPctUsed ? ` · ${item.yieldPctUsed}% yield` : ''}
-                        </p>
-                      ) : null}
-
-                      {item.inventoryQty ? (
-                        <p className="text-xs text-muted-foreground">
-                          {formatAmount(item.inventoryQty, item.shoppingUnit)} already in your inventory
-                        </p>
-                      ) : null}
-
-                      {item.inventoryNote ? (
-                        <p className="mt-1 flex items-start gap-1.5 rounded-md bg-muted p-1.5 text-xs text-muted-foreground">
-                          <Info className="mt-0.5 size-3 shrink-0" />
-                          {item.inventoryNote}
-                        </p>
-                      ) : null}
-
-                      {item.notes ? (
-                        <p className="mt-1 text-xs text-muted-foreground">{item.notes}</p>
-                      ) : null}
-
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-2 text-xs"
-                          disabled={have.isPending}
-                          onClick={() => have.run({ id: item.id, value: !item.haveAlready })}
-                        >
-                          <PackagePlus className="size-3.5" />
-                          {item.haveAlready ? 'Need to buy' : 'Already have'}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-2 text-xs"
-                          onClick={() => setEditing(item)}
-                        >
-                          <Pencil className="size-3.5" />
-                          Edit
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
+                        {item.isAdHoc ? <Badge variant="outline">Added</Badge> : null}
+                      </span>
+                      <span className="tabular block text-sm text-muted-foreground">
+                        Buy <span className="font-semibold text-foreground">{formatAmount(item.shoppingQty, item.shoppingUnit)}</span>
+                        {packs ? ` · ${packs}` : ''}
+                      </span>
+                    </span>
+                    <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  </button>
                 </div>
               );
             })}
@@ -314,34 +257,65 @@ export function GroceryList({
         </section>
       ))}
 
-      {items.some((i) => i.rawQty != null && i.yieldPctUsed == null) ? (
-        <p className="flex items-start gap-2 rounded-lg bg-warning/10 p-3 text-xs text-warning">
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-          Some cooked-weight items have no cooking yield set, so the amount shown is the cooked weight
-          rather than what to buy. Set a yield under Prep → Yields.
-        </p>
-      ) : null}
+      <Button variant="outline" size="block" onClick={() => setAdding(true)}>
+        <Plus className="size-4" />
+        Add an item
+      </Button>
 
       <Sheet open={adding} onOpenChange={setAdding}>
         <SheetContent title="Add an item" description="Anything not in your plan.">
-          <ItemForm
-            groceryWeekId={groceryWeekId}
-            onDone={() => setAdding(false)}
-            onCancel={() => setAdding(false)}
-          />
+          <ItemForm groceryWeekId={groceryWeekId} onDone={() => setAdding(false)} onCancel={() => setAdding(false)} />
         </SheetContent>
       </Sheet>
 
-      <Sheet open={editing !== null} onOpenChange={(open) => (open ? undefined : setEditing(null))}>
-        <SheetContent title={editing?.name ?? 'Item'}>
-          {editing ? (
-            <ItemForm
-              key={editing.id}
-              groceryWeekId={groceryWeekId}
-              initial={editing}
-              onDone={() => setEditing(null)}
-              onCancel={() => setEditing(null)}
-            />
+      <Sheet open={current !== null} onOpenChange={(o) => !o && close()}>
+        <SheetContent title={current?.name ?? 'Item'} description={mode === 'edit' ? 'Edit this item.' : undefined}>
+          {current && mode === 'detail' ? (
+            <div className="space-y-4">
+              <dl className="divide-y divide-border rounded-lg border border-border text-sm">
+                <div className="flex justify-between gap-3 px-3 py-2.5">
+                  <dt className="text-muted-foreground">Buy</dt>
+                  <dd className="tabular text-right font-semibold">
+                    {formatAmount(current.shoppingQty, current.shoppingUnit)}
+                    {packsLabel(current) ? <span className="block text-xs font-normal text-muted-foreground">{packsLabel(current)}</span> : null}
+                  </dd>
+                </div>
+                {current.cookedQty != null ? (
+                  <div className="flex justify-between gap-3 px-3 py-2.5">
+                    <dt className="text-muted-foreground">Plan needs</dt>
+                    <dd className="tabular text-right">
+                      {formatAmount(current.cookedQty, current.requiredUnit)} cooked
+                      {current.yieldPctUsed ? <span className="block text-xs text-muted-foreground">at {current.yieldPctUsed}% yield</span> : null}
+                    </dd>
+                  </div>
+                ) : null}
+                {current.inventoryQty ? (
+                  <div className="flex justify-between gap-3 px-3 py-2.5">
+                    <dt className="text-muted-foreground">Already at home</dt>
+                    <dd className="tabular text-right">{formatAmount(current.inventoryQty, current.shoppingUnit)}</dd>
+                  </div>
+                ) : null}
+              </dl>
+              {current.inventoryNote ? <p className="rounded-lg bg-muted p-2.5 text-xs text-muted-foreground">{current.inventoryNote}</p> : null}
+              {current.notes ? <p className="text-sm">{current.notes}</p> : null}
+
+              <div className="space-y-2">
+                <Button
+                  variant="outline"
+                  size="block"
+                  disabled={have.isPending}
+                  onClick={() => have.run({ id: current.id, value: !current.haveAlready })}
+                >
+                  {current.haveAlready ? 'I need to buy this' : 'I already have this'}
+                </Button>
+                <Button variant="outline" size="block" onClick={() => setMode('edit')}>
+                  Edit item
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          {current && mode === 'edit' ? (
+            <ItemForm key={current.id} groceryWeekId={groceryWeekId} initial={current} onDone={close} onCancel={() => setMode('detail')} />
           ) : null}
         </SheetContent>
       </Sheet>

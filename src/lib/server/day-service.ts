@@ -271,6 +271,13 @@ export interface EnsureDayOptions {
   dayTypeId?: string;
   /** Rebuild the day even if it already exists. */
   regenerate?: boolean;
+  /**
+   * When rebuilding, meals already eaten or skipped keep the exact items and
+   * quantities they were logged with. Their status and times are always kept;
+   * this additionally freezes what was on the plate, so switching the day type
+   * after lunch does not rewrite what lunch was.
+   */
+  keepLoggedMeals?: boolean;
 }
 
 /**
@@ -328,7 +335,7 @@ export async function ensureDailyPlan(userId: string, date: DayKey, options: Ens
       // we were waiting for it.
       const existing = await tx.dailyPlan.findUnique({
         where: { userId_date: { userId, date: toDbDate(date) } },
-        include: { meals: true, supplements: true },
+        include: { meals: { include: { items: true } }, supplements: true },
       });
 
       const sameDayType = !options.dayTypeId || existing?.dayTypeId === options.dayTypeId;
@@ -421,6 +428,7 @@ export async function ensureDailyPlan(userId: string, date: DayKey, options: Ens
             actualTime: m.actualTime,
             skippedAt: m.skippedAt,
             notes: m.notes,
+            items: m.items,
           },
         ]),
       );
@@ -475,6 +483,34 @@ export async function ensureDailyPlan(userId: string, date: DayKey, options: Ens
 
       for (const meal of materialised.meals) {
         const carried = previousMealStatus.get(meal.sourceMealId) ?? previousMealStatus.get(meal.name);
+
+        // A logged meal is history: with keepLoggedMeals the plate it was
+        // logged with is copied across untouched instead of being re-portioned.
+        const frozenItems =
+          options.keepLoggedMeals && carried && carried.status !== 'PENDING' && carried.items.length > 0
+            ? carried.items.map((item) => ({
+                sourceIngredientId: item.sourceIngredientId,
+                foodId: item.foodId,
+                foodName: item.foodName,
+                quantity: item.quantity,
+                unit: item.unit,
+                state: item.state,
+                required: item.required,
+                sortOrder: item.sortOrder,
+                optionGroupId: item.optionGroupId,
+                optionGroupName: item.optionGroupName,
+                isSubstituted: item.isSubstituted,
+                isQuantityOverridden: item.isQuantityOverridden,
+                calories: item.calories,
+                protein: item.protein,
+                carbs: item.carbs,
+                fat: item.fat,
+                fibre: item.fibre,
+                sodium: item.sodium,
+                notes: item.notes,
+              }))
+            : null;
+
         await tx.dailyMeal.create({
           data: {
             dailyPlanId: dailyPlan.id,
@@ -490,7 +526,7 @@ export async function ensureDailyPlan(userId: string, date: DayKey, options: Ens
             skippedAt: carried?.skippedAt ?? null,
             notes: carried?.notes ?? null,
             items: {
-              create: meal.items.map((item) => ({
+              create: frozenItems ?? meal.items.map((item) => ({
                 sourceIngredientId: item.sourceIngredientId,
                 foodId: item.foodId,
                 foodName: item.foodName,

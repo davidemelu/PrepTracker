@@ -1,0 +1,223 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Plan editor</title>
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+  body { margin: 0; background: #fafcff; color: #0c121a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif; -webkit-font-smoothing: antialiased; font-size: 15px; line-height: 22px; }
+  a { color: #2966cc; } a:hover { color: #1f4f9f; }
+  * { box-sizing: border-box; }
+  .num { font-variant-numeric: tabular-nums; }
+  .screen { width: 390px; background: #fafcff; position: relative; display: flex; flex-direction: column; overflow: hidden; }
+  .body { display: flex; flex-direction: column; gap: 12px; padding: 0 16px 24px; }
+  .hdr { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 16px 12px; }
+  .h1 { font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+  .sub { font-size: 13px; line-height: 18px; color: #626975; margin: 0; }
+  .eyebrow { font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #626975; }
+  .section { font-size: 13px; line-height: 16px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #626975; display: flex; align-items: center; justify-content: space-between; padding: 12px 0 0; }
+  .card { background: #ffffff; border: 1px solid #dee1e7; border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+  .row { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 16px; border-top: 1px solid #dee1e7; }
+  .row:first-child { border-top: 0; }
+  .grow { flex: 1; min-width: 0; }
+  .title { font-size: 17px; line-height: 22px; font-weight: 600; }
+  .secondary { font-size: 13px; line-height: 18px; color: #626975; }
+  .metric { font-size: 28px; line-height: 32px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 48px; padding: 0 16px; border-radius: 10px; font-size: 16px; font-weight: 600; border: 1px solid transparent; }
+  .btn.hero { height: 52px; width: 100%; background: #1c8742; color: #fff; }
+  .btn.primary { background: #2966cc; color: #fff; }
+  .btn.tonal { background: #e6f3ff; color: #2966cc; height: 52px; }
+  .btn.outline { background: #ffffff; border-color: #dee1e7; color: #0c121a; height: 44px; }
+  .btn.text { background: transparent; color: #2966cc; height: 44px; padding: 0 8px; }
+  .btn.danger { background: #cc2827; color: #fff; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid #dee1e7; background: #ffffff; font-size: 15px; font-weight: 500; }
+  .chip.on { background: #e6f3ff; border-color: #2966cc; color: #2966cc; }
+  .pill { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 16px; }
+  .pill.success { background: #e0fae4; color: #067132; }
+  .pill.training { background: #e6f3ff; color: #2966cc; }
+  .pill.rest { background: #d8faf9; color: #007475; }
+  .pill.warn { background: #ffefcd; color: #9a5b00; }
+  .pill.neutral { background: #eff2f7; color: #626975; }
+  .seg { display: flex; background: #eff2f7; border-radius: 999px; padding: 4px; height: 48px; gap: 4px; }
+  .seg > div { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 999px; font-size: 15px; font-weight: 600; color: #626975; }
+  .seg > div.on { background: #2966cc; color: #fff; }
+  .seg > div.on.rest { background: #008080; }
+  .seg.small { height: 36px; padding: 3px; }
+  .seg.small > div { font-size: 13px; }
+  .seg.small > div.on { background: #ffffff; color: #0c121a; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+  .bar { height: 6px; border-radius: 999px; background: #eff2f7; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: #2966cc; border-radius: 999px; }
+  .bar.thin { height: 4px; }
+  .nav { display: flex; align-items: stretch; height: 64px; border-top: 1px solid #dee1e7; background: #ffffff; }
+  .nav > div { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 11px; font-weight: 500; color: #626975; }
+  .nav > div.on { color: #2966cc; }
+  .nav > div.on span.ind { position: absolute; width: 20px; height: 3px; border-radius: 999px; background: #2966cc; top: 0; }
+  .nav > div { position: relative; }
+  .pinned { position: absolute; left: 0; right: 0; bottom: 0; }
+  .input { display: flex; align-items: center; justify-content: space-between; height: 48px; border: 1px solid #8e929a; border-radius: 10px; padding: 0 14px; background: #ffffff; font-size: 16px; }
+  .label { font-size: 13px; line-height: 16px; font-weight: 500; }
+  .hint { font-size: 13px; line-height: 18px; color: #626975; }
+  .overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.55); }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: #ffffff; border-radius: 20px 20px 0 0; border: 1px solid #dee1e7; display: flex; flex-direction: column; }
+  .sheet-hd { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px; border-bottom: 1px solid #dee1e7; }
+  .sheet-bd { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+  .sheet-ft { display: flex; gap: 8px; padding: 12px 16px 20px; border-top: 1px solid #dee1e7; }
+  .sheet-ft .btn { flex: 1; }
+  .ing { display: flex; align-items: baseline; gap: 12px; padding: 6px 0; }
+  .ing .amt { width: 64px; flex: none; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+  .step { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-top: 1px solid #dee1e7; }
+  .step .n { width: 24px; height: 24px; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex: none; }
+  .tile { flex: 1; background: #ffffff; border: 1px solid #dee1e7; border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 2px; }
+  .cb { width: 28px; height: 28px; border-radius: 8px; border: 2px solid #8e929a; flex: none; display: flex; align-items: center; justify-content: center; }
+  .cb.on { background: #1c8742; border-color: #1c8742; color: #fff; }
+  .cb.big { width: 44px; height: 44px; border-radius: 999px; }
+  .banner { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #ffefcd; color: #9a5b00; font-size: 13px; font-weight: 500; }
+</style>
+</helmet>
+<div class="screen" style="height: 1360px;">
+
+  
+  <div class="hdr">
+    <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+      
+      <div style="min-width: 0;">
+        <h1 class="h1">Plan</h1>
+        <p class="sub">Current plan</p>
+      </div>
+    </div>
+    <div class="btn text" style="margin-right: -8px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg> Add meal</div>
+  </div>
+  <div class="body">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+      <span class="secondary">Showing portions for</span>
+      <div class="seg small" style="width: 200px;"><div class="on">Training</div><div>Rest</div></div>
+    </div>
+    
+  <div class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 8px;">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span class="title">Meal 1</span>
+      
+      <span class="grow"></span>
+      <span class="secondary num">8:00 AM</span>
+      <span style="color: #626975; display: flex;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span>
+    </div>
+    <div>
+  <div class="ing">
+    
+    <span class="amt">2</span>
+    <span class="grow">Eggs</span>
+    
+  </div>
+  <div class="ing">
+    
+    <span class="amt">200 g</span>
+    <span class="grow">Egg whites</span>
+    
+  </div>
+  <div class="ing">
+    
+    <span class="amt">2</span>
+    <span class="grow">Bagels</span>
+    
+  </div>
+  <div class="ing">
+    
+    <span class="amt">½</span>
+    <span class="grow">Avocado</span>
+    
+  </div></div>
+  </div>
+    
+  <div class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 8px;">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span class="title">Meal 2</span>
+      
+      <span class="grow"></span>
+      <span class="secondary num">12:30 PM</span>
+      <span style="color: #626975; display: flex;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span>
+    </div>
+    <div>
+  <div class="ing">
+    
+    <span class="amt">225 g</span>
+    <span class="grow">White rice <span class="secondary">(cooked)</span></span>
+    
+  </div>
+  <div class="ing">
+    
+    <span class="amt">175 g</span>
+    <span class="grow">Chicken breast <span class="secondary">or turkey</span></span>
+    
+  </div>
+  <div class="ing">
+    
+    <span class="amt">100 g</span>
+    <span class="grow">Frozen vegetables</span>
+    
+  </div>
+  <div class="ing">
+    
+    <span class="amt">1</span>
+    <span class="grow">Orange</span>
+    
+  </div></div>
+  </div>
+    
+  <div class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 8px;">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span class="title">Meal 3</span>
+      <span class="pill neutral">Pre-workout</span>
+      <span class="grow"></span>
+      <span class="secondary num">5:30 PM</span>
+      <span style="color: #626975; display: flex;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span>
+    </div>
+    <div>
+  <div class="ing">
+    
+    <span class="amt">70 g</span>
+    <span class="grow">Oats</span>
+    
+  </div>
+  <div class="ing">
+    
+    <span class="amt">50 g</span>
+    <span class="grow">IsoWhey</span>
+    
+  </div>
+  <div class="ing">
+    
+    <span class="amt">100 g</span>
+    <span class="grow">Frozen berries <span class="secondary">or banana</span></span>
+    
+  </div>
+  <div class="ing">
+    
+    <span class="amt">16 g</span>
+    <span class="grow">Peanut butter</span>
+    
+  </div></div>
+  </div>
+    <div class="secondary" style="text-align: center;">+ 2 more meals</div>
+    <div class="section">Routine</div>
+    <div class="card">
+      <div class="row"><span style="color: #626975; display: flex;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.4 14.4 9.6 9.6"></path><path d="M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z"></path><path d="m21.5 21.5-1.4-1.4"></path><path d="M3.9 3.9 2.5 2.5"></path><path d="M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z"></path></svg></span><div class="grow"><div style="font-weight: 500;">Training days &amp; workouts</div><div class="secondary">Mon–Sun pattern and usual sessions</div></div><span style="color: #626975; display: flex;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span></div>
+      <div class="row"><span style="color: #626975; display: flex;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg></span><div class="grow"><div style="font-weight: 500;">Meal timing</div><div class="secondary">Automatic times around training</div></div><span style="color: #626975; display: flex;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span></div>
+      <div class="row"><span style="color: #626975; display: flex;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg></span><div class="grow"><div style="font-weight: 500;">Supplements</div><div class="secondary">Doses and timing</div></div><span style="color: #626975; display: flex;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span></div>
+    </div>
+    <div class="section">Library</div>
+    <div class="card">
+      <div class="row"><div class="grow"><div style="font-weight: 500;">Foods</div><div class="secondary">Units, packages, yields, nutrition</div></div><span style="color: #626975; display: flex;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span></div>
+      <div class="row"><div class="grow"><div style="font-weight: 500;">Substitutions</div><div class="secondary">Chicken or turkey, berries or banana</div></div><span style="color: #626975; display: flex;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span></div>
+      <div class="row"><div class="grow"><div style="font-weight: 500;">Meal plans</div><div class="secondary">Create, copy or switch plans</div></div><span style="color: #626975; display: flex;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span></div>
+    </div>
+  </div>
+  <div class="nav "><div class=""><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v4M16 2v4"></path><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M3 10h18"></path><path d="m9 16 2 2 4-4"></path></svg><span>Today</span></div><div class="on"><span class="ind"></span><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg><span>Plan</span></div><div class=""><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21a1 1 0 0 0 1-1v-5.35c0-.457.316-.844.727-1.041a4 4 0 0 0-2.134-7.589 5 5 0 0 0-9.186 0 4 4 0 0 0-2.134 7.588c.411.198.727.585.727 1.041V20a1 1 0 0 0 1 1Z"></path><path d="M6 17h12"></path></svg><span>Prep</span></div><div class=""><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="21" r="1"></circle><circle cx="19" cy="21" r="1"></circle><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path></svg><span>Groceries</span></div><div class=""><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg><span>More</span></div></div>
+
+</div>
+</x-dc>
+</body>
+</html>
