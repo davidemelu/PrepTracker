@@ -105,7 +105,15 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 COPY --from=builder /app/dist/seed.cjs ./seed.cjs
 COPY docker/migrate-entrypoint.sh /usr/local/bin/migrate-entrypoint.sh
-RUN chmod +x /usr/local/bin/migrate-entrypoint.sh
+# Strip carriage returns before making it executable. .gitattributes keeps LF
+# in the working tree, but `docker build` copies what is on disk, and a checkout
+# with core.autocrlf=true yields a shebang of `#!/bin/sh` followed by a carriage
+# return. The kernel then looks for an interpreter with a carriage return in its
+# name, and the container exits 127 saying "No such file or directory" about a
+# file that is plainly there. One sed makes the image immune to how it was
+# checked out.
+RUN sed -i 's/\r$//' /usr/local/bin/migrate-entrypoint.sh \
+  && chmod +x /usr/local/bin/migrate-entrypoint.sh
 
 ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/migrate-entrypoint.sh"]
 # `docker compose run --rm migrate status` and `… seed` override this.
@@ -129,7 +137,8 @@ RUN apk add --no-cache age rsync openssh-client tini tzdata
 ENV HOME=/tmp
 
 COPY docker/backup-entrypoint.sh /usr/local/bin/backup-entrypoint.sh
-RUN chmod +x /usr/local/bin/backup-entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/backup-entrypoint.sh \
+  && chmod +x /usr/local/bin/backup-entrypoint.sh
 
 # Runs as the app's uid, not root, so everything in ./backups has one owner and
 # the container needs no capabilities at all. See docs/DEPLOYMENT.md.
@@ -185,7 +194,8 @@ COPY --from=builder --chown=preptracker:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=preptracker:nodejs /app/public ./public
 
 COPY --chown=preptracker:nodejs docker/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh \
+  && chmod +x /usr/local/bin/entrypoint.sh
 
 USER preptracker
 EXPOSE 3000
