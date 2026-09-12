@@ -514,5 +514,6 @@ typed-confirmation restore.
 6. **Weekly view and Plan grouping** (H14, M8, M9, M10).
 7. **Polish** (Medium and Low items).
 
-No CSS or code changes were made during this audit. Every finding above is documented only; the
-screenshots that back the measurements are in `docs/audit-screenshots/`.
+No code changes were made during the audit itself; the screenshots that back the measurements are
+in `docs/audit-screenshots/`. Implementation began after approval and is tracked in
+[IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md), which records which findings each slice closes.
