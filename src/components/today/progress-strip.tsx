@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Loader2, RotateCw } from 'lucide-react';
 import { regenerateDay } from '@/lib/actions/day';
+import { todayKey } from '@/lib/domain/dates';
 import { formatWater } from '@/lib/domain/water';
 import { useAction } from '@/lib/hooks/use-action';
 import { Button } from '@/components/ui/button';
@@ -116,20 +117,28 @@ export function ProgressStrip({ day }: { day: DayView }) {
             </div>
           ) : null}
 
-          <div className="mt-5 border-t border-border pt-4">
-            <Button
-              variant="outline"
-              size="block"
-              disabled={regenerate.isPending}
-              onClick={() => regenerate.run({ date: day.date })}
-            >
-              {regenerate.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RotateCw className="size-4" aria-hidden />}
-              Update today from your plan
-            </Button>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Use this after editing your meal plan or timing. Meals already eaten keep their record.
-            </p>
-          </div>
+          {/*
+            Only offered for today and days still to come. A past day is a
+            record of what happened, and re-timing the meals you never got to
+            would quietly rewrite it — which is why the action refuses one.
+            Offering a button that can only fail is worse than not offering it.
+          */}
+          {day.date >= todayKey() ? (
+            <div className="mt-5 border-t border-border pt-4">
+              <Button
+                variant="outline"
+                size="block"
+                disabled={regenerate.isPending}
+                onClick={() => regenerate.run({ date: day.date })}
+              >
+                {regenerate.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RotateCw className="size-4" aria-hidden />}
+                Update this day from your plan
+              </Button>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Use this after editing your meal plan or timing. Meals already eaten or skipped keep their record.
+              </p>
+            </div>
+          ) : null}
         </SheetContent>
       </Sheet>
     </>
