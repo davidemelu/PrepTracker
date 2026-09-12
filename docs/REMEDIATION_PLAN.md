@@ -408,7 +408,7 @@ that locks the old behaviour); document or align the weighting of `overallPercen
 - **Depends on:** 0.1
 - **Workflow:** on `pull_request` and `push` to `main`: `actions/setup-node` 22 with npm
 cache → `npm ci` → `npm run lint` → `npx prettier --check .` (after 6.2) → `npm run typecheck`
-→ `npx prisma validate` → `npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --exit-code` (schema and migrations agree) →
+→ `npx prisma validate` → a migration-drift check (schema and migrations agree) →
 `npm run test:unit` → Postgres 16 service → `npm run test:integration` → `npm run build` →
 `npm audit --audit-level=high` (allow-list the Prisma CLI advisories until 5.1 removes it
 from the runtime). Second job on `main` and tags: `docker build`, Trivy scan, push to GHCR
@@ -416,6 +416,11 @@ tagged with the version.
 - **Branch protection on** `main`**:** require PR, require the CI check, no force push, no
 deletion. Do not require reviews (single maintainer); do require the PR template.
 - **Validation:** a PR with a failing unit test is blocked.
+- **Correction, as built:** Prisma 7 removed `--to-schema-datamodel` and `--shadow-database-url`
+  and takes the shadow database from the config file, so the drift check runs with a CI-only
+  config at `scripts/ci/prisma.config.ci.ts`. Putting `SHADOW_DATABASE_URL` in the project's
+  own `prisma.config.ts` would break every everyday `prisma` command on a machine that has
+  no shadow database, because `env()` there resolves eagerly.
 
 
 
