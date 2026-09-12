@@ -3,12 +3,16 @@ import { SESSION_COOKIE } from '@/lib/auth/session';
 
 /**
  * A cheap presence check only: the cookie's signature is verified server-side by
- * `requireUser` on every page and action. The middleware exists so a signed-out
- * phone lands on the login screen instead of a flash of empty dashboard.
+ * `requireUser` on every page and action, which is also where a session revoked
+ * by a password change is caught. This exists so a signed-out phone lands on the
+ * login screen instead of a flash of empty dashboard.
+ *
+ * Next 16 renamed this file convention from `middleware` to `proxy`; the
+ * behaviour is unchanged.
  */
 const PUBLIC_PATHS = ['/login', '/api/health', '/manifest.webmanifest', '/sw.js', '/offline'];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {

@@ -571,7 +571,7 @@ src/
     server/                services needing domain + database
     validation/            zod schemas
     auth/                  session, scrypt passwords, guards
-  middleware.ts            redirects signed-out requests to /login
+  proxy.ts                 redirects signed-out requests to /login
 docker/entrypoint.sh       wait for db → migrate → seed if empty → start
 scripts/
   backup.ts restore.ts     CLI backup and restore
