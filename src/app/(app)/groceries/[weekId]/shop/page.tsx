@@ -21,7 +21,7 @@ export default async function ShopPage({ params }: { params: Promise<{ weekId: s
 
   return (
     <>
-      <PageHeader title="Shopping" subtitle={week.name} backHref={`/groceries/${week.id}`} />
+      <PageHeader title="Shopping" subtitle={week.name} backHref={`/groceries/${week.id}`} sticky={false} />
       <PageBody>
         <ShoppingMode groceryWeekId={week.id} items={week.items as unknown as GroceryItemRow[]} />
       </PageBody>

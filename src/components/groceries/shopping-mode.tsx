@@ -79,12 +79,17 @@ export function ShoppingMode({
   return (
     <div className="space-y-3">
       {/* Sticky control bar ------------------------------------------------ */}
-      <div className="sticky top-[57px] z-20 -mx-4 space-y-2 border-b border-border bg-background/95 px-4 py-2 backdrop-blur-sm">
+      {/*
+        Sticks to the very top (the page header on this route does not stick),
+        so the offset never has to match the header's height, which changes
+        with the safe-area inset in standalone mode on a phone.
+      */}
+      <div className="sticky top-0 z-20 -mx-4 -mt-4 space-y-2 border-b border-border bg-background/95 px-4 py-2 pt-[calc(0.5rem+env(safe-area-inset-top))] backdrop-blur-sm">
         <div className="flex items-center gap-3">
-          <div className="flex-1">
+          <div className="flex-1" aria-live="polite">
             <p className="tabular text-2xl font-bold leading-none">{remaining}</p>
             <p className="text-xs text-muted-foreground">
-              left of {total} · {total - remaining} in the trolley
+              {remaining === 1 ? 'item' : 'items'} remaining · {total - remaining} in the trolley
             </p>
           </div>
 
