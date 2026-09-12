@@ -127,7 +127,7 @@ export function WorkoutsManager({
                     key={focus.id}
                     type="button"
                     onClick={() => setEditingFocus(focus)}
-                    className="h-10 rounded-lg border border-border px-3 text-sm transition-colors hover:bg-accent"
+                    className="min-h-11 rounded-lg border border-border px-3 text-sm transition-colors hover:bg-accent"
                   >
                     {focus.name}
                     {focus.preWorkoutMinutes != null ? (
@@ -152,7 +152,7 @@ export function WorkoutsManager({
                     key={focus.id}
                     type="button"
                     onClick={() => setEditingFocus(focus)}
-                    className="h-10 rounded-lg border border-dashed border-border px-3 text-sm text-muted-foreground"
+                    className="min-h-11 rounded-lg border border-dashed border-border px-3 text-sm text-muted-foreground"
                   >
                     {focus.name}
                   </button>

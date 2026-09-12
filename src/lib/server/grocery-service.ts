@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { prisma } from '@/lib/db';
-import { startOfWeek, toDbDate, type DayKey } from '@/lib/domain/dates';
+import { startOfWeek, type DayKey } from '@/lib/domain/dates';
 import {
   applyInventory,
   generateGroceryList,
@@ -209,8 +209,4 @@ export async function suggestDayTypeCounts(
     dayTypeName: dayType.name,
     days: counts.get(dayType.id) ?? 0,
   }));
-}
-
-export function toDbDateSafe(key: DayKey) {
-  return toDbDate(key);
 }

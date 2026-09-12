@@ -243,3 +243,52 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/*
+ * Sheet and dialog motion.
+ *
+ * The components carried `animate-in` / `slide-in-from-bottom` classes, which
+ * come from a Tailwind animation plugin this project has never depended on, so
+ * nothing moved: every sheet appeared instantly, and the code said otherwise.
+ * Written out here instead of adding the plugin, because four keyframes is less
+ * to maintain than a dependency.
+ *
+ * Radix keeps an element mounted while an animation on its closed state is
+ * running, so the exit is real rather than an instant unmount. The
+ * prefers-reduced-motion block above shortens all of it to nothing.
+ */
+@keyframes sheet-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes sheet-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes sheet-panel-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes sheet-panel-out {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+
+.sheet-overlay[data-state='open'] {
+  animation: sheet-overlay-in 180ms ease-out;
+}
+
+.sheet-overlay[data-state='closed'] {
+  animation: sheet-overlay-out 150ms ease-in;
+}
+
+.sheet-panel[data-state='open'] {
+  animation: sheet-panel-in 220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.sheet-panel[data-state='closed'] {
+  animation: sheet-panel-out 180ms cubic-bezier(0.32, 0.72, 0, 1);
+}

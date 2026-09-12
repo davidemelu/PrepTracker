@@ -104,7 +104,7 @@ function GroupForm({
                   type="button"
                   onClick={() => setPreferredFoodId(id)}
                   className={cn(
-                    'h-10 rounded-lg border px-3 text-sm transition-colors',
+                    'min-h-11 rounded-lg border px-3 text-sm transition-colors',
                     preferredFoodId === id ? 'border-primary bg-primary/10 text-primary' : 'border-border',
                   )}
                 >

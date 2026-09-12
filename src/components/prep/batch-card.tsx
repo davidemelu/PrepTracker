@@ -155,7 +155,7 @@ export function BatchCard({
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium">Weigh raw</span>
                 {stage !== 'raw' ? (
-                  <button type="button" className="tabular text-sm font-semibold" onClick={() => save.run({ id: batch.id, rawWeightG: undefined, cookedWeightG: undefined } as unknown as Parameters<typeof updatePrepBatch>[0])}>
+                  <button type="button" className="-mr-2 inline-flex min-h-11 items-center px-2 text-sm font-semibold tabular" onClick={() => save.run({ id: batch.id, rawWeightG: undefined, cookedWeightG: undefined } as unknown as Parameters<typeof updatePrepBatch>[0])}>
                     {batch.rawWeightG != null ? formatAmount(batch.rawWeightG, 'g') : ''}
                     <span className="sr-only">, tap to change</span>
                   </button>
@@ -195,7 +195,7 @@ export function BatchCard({
               <div className="flex items-center justify-between gap-2">
                 <span className={cn('font-medium', stage === 'raw' && 'text-muted-foreground')}>Cook, then weigh</span>
                 {stage === 'store' || stage === 'done' ? (
-                  <span className="tabular text-sm font-semibold">
+                  <span className="-mr-2 inline-flex min-h-11 items-center px-2 text-sm font-semibold tabular">
                     {batch.cookedWeightG != null ? formatAmount(batch.cookedWeightG, 'g') : ''}
                     {batch.measuredYieldPct != null ? <span className="text-muted-foreground"> · {batch.measuredYieldPct}%</span> : null}
                   </span>
@@ -257,7 +257,7 @@ export function BatchCard({
               <div className="flex items-center justify-between gap-2">
                 <span className={cn('font-medium', stage !== 'store' && stage !== 'done' && 'text-muted-foreground')}>Store</span>
                 {stage === 'done' ? (
-                  <Link href="/prep/storage" className="text-sm font-semibold text-primary">
+                  <Link href="/prep/storage" className="-mr-2 inline-flex min-h-11 items-center px-2 text-sm font-semibold text-primary">
                     {batch.storedPortions} stored
                   </Link>
                 ) : null}

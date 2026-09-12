@@ -7,6 +7,11 @@ import { cn } from '@/lib/utils';
 export interface SegmentedOption {
   value: string;
   label: string;
+  /**
+   * Decorative only: it sits beside the label, never instead of it, so the
+   * control still reads without knowing what a half-moon means.
+   */
+  icon?: React.ComponentType<{ className?: string }>;
   /** Classes for the active segment, e.g. a different fill per day type. */
   activeClassName?: string;
 }
@@ -118,7 +123,11 @@ export function SegmentedControl({
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            {active ? <Check className="size-4 shrink-0" strokeWidth={3} aria-hidden /> : null}
+            {active ? (
+              <Check className="size-4 shrink-0" strokeWidth={3} aria-hidden />
+            ) : option.icon ? (
+              <option.icon className="size-4 shrink-0" />
+            ) : null}
             <span className="truncate">{option.label}</span>
           </button>
         );

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildMeatRequirement,
   cookedToRaw,
   effectiveYield,
   measureYield,
@@ -147,33 +146,6 @@ describe('effectiveYield', () => {
   });
 });
 
-describe('buildMeatRequirement', () => {
-  it('produces cooked and raw amounts plus a portion count', () => {
-    const req = buildMeatRequirement({
-      foodId: 'chicken',
-      foodName: 'Chicken breast',
-      cookedRequiredG: 2450,
-      yieldPct: 75,
-      portionSizeG: 175,
-    });
-    expect(req.cookedRequiredG).toBe(2450);
-    expect(req.rawRequiredG).toBe(3266.7);
-    expect(req.portionsRequired).toBe(14);
-    expect(req.missingYield).toBe(false);
-  });
-
-  it('flags a missing yield instead of inventing one', () => {
-    const req = buildMeatRequirement({
-      foodId: 'lamb',
-      foodName: 'Lamb',
-      cookedRequiredG: 1000,
-      yieldPct: null,
-      portionSizeG: 175,
-    });
-    expect(req.rawRequiredG).toBeNull();
-    expect(req.missingYield).toBe(true);
-  });
-});
 
 describe('effectiveYield with a mix of sources', () => {
   const at = (day: number) => `2026-09-${String(day).padStart(2, '0')}T10:00:00.000Z`;

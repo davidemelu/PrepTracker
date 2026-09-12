@@ -7,7 +7,6 @@ import { fromDbDate, isoWeekday, startOfWeek, toDbDate, type DayKey } from '@/li
 import {
   materialiseDay,
   materialiseSupplements,
-  SUPPLEMENT_TIMING_LABELS,
   type MaterialiseFood,
   type MaterialiseMeal,
   type SupplementLike,
@@ -685,4 +684,3 @@ export async function existingDayKeys(userId: string, from: DayKey, to: DayKey):
   return new Set(rows.map((r) => fromDbDate(r.date)));
 }
 
-export const SUPPLEMENT_TIMING_LABEL_MAP = SUPPLEMENT_TIMING_LABELS;
