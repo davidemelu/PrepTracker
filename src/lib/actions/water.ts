@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { requireUserId } from '@/lib/auth/guards';
-import { toDbDate } from '@/lib/domain/dates';
+import { toDbDate, todayKey } from '@/lib/domain/dates';
 import { isProbableDuplicate, lastEntry, validateWaterAmount } from '@/lib/domain/water';
 import { ensureDailyPlan } from '@/lib/server/day-service';
 import { cuid, dayKey, numberish, optionalText } from '@/lib/validation/common';
@@ -110,7 +110,6 @@ const targetSchema = z.object({
     .refine((v) => v <= 20000, 'A target above 20 L is almost certainly a typo.'),
   /** Also apply the new target to today's stored plan. */
   applyToToday: z.boolean().optional(),
-  date: dayKey.optional(),
 });
 
 /**
@@ -120,16 +119,18 @@ const targetSchema = z.object({
 export async function updateWaterTarget(input: {
   targetMl: number;
   applyToToday?: boolean;
-  date?: string;
 }): Promise<ActionResult<undefined>> {
-  return runAction(targetSchema, input, async ({ targetMl, applyToToday, date }) => {
+  return runAction(targetSchema, input, async ({ targetMl, applyToToday }) => {
     const userId = await requireUserId();
 
     await prisma.settings.update({ where: { userId }, data: { waterTargetMl: targetMl } });
 
-    if (applyToToday && date) {
+    if (applyToToday) {
+      // Today is resolved on the server. It used to come from the client, which
+      // meant any date could be passed and a past day's target rewritten —
+      // moving the adherence already recorded against it.
       await prisma.dailyPlan.updateMany({
-        where: { userId, date: toDbDate(date) },
+        where: { userId, date: toDbDate(todayKey()) },
         data: { waterTargetMl: targetMl },
       });
     }

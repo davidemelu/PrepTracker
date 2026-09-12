@@ -12,7 +12,6 @@ import {
   updateStorageSettings,
   updateTimingSettings,
 } from '@/lib/actions/settings';
-import { todayKey } from '@/lib/domain/dates';
 import { formatWater } from '@/lib/domain/water';
 import { useAction } from '@/lib/hooks/use-action';
 import { ThemeToggle } from '@/components/more/theme-toggle';
@@ -164,7 +163,7 @@ export function SettingsManager({ initial, weekSummary }: { initial: SettingsVal
           pending={saveWater.isPending || saveQuick.isPending}
           saved={saved === 'water'}
           onClick={() => {
-            saveWater.run({ targetMl: Number(water), applyToToday: true, date: todayKey() });
+            saveWater.run({ targetMl: Number(water), applyToToday: true });
             saveQuick.run({ quickAddAMl: Number(quickA), quickAddBMl: Number(quickB) } as unknown as Parameters<typeof updateQuickAddAmounts>[0]);
           }}
         />
