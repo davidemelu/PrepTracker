@@ -318,7 +318,10 @@ destination for the off-host copy.
 cp .env.example .env
 # Set AUTH_SECRET, POSTGRES_PASSWORD and TZ
 
-mkdir -p backups && sudo chown -R 1001:1001 backups
+mkdir -p backups
+# On a Linux host only, so the backup container (uid 1001) can write there.
+# Docker Desktop on Windows or macOS needs no chown:
+#   sudo chown -R 1001:1001 backups
 
 docker compose up -d --build
 docker compose logs -f app
@@ -560,9 +563,11 @@ has no reason to be able to read every historical dump.
 
 ## Updating
 
-```bash
-cd /srv/preptracker
+Run these from the deployment directory — the folder holding `docker-compose.yml`.
+On Docker Desktop that is the repository itself, so there is no separate server
+checkout and nothing to `cd` to.
 
+```bash
 # 1. Back up first. The migrate service will refuse to run a pending migration
 #    without a recent dump, but take one deliberately anyway.
 docker compose run --rm backup now
