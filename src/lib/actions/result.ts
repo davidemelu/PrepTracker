@@ -1,4 +1,6 @@
+import { unstable_rethrow } from 'next/navigation';
 import { type z } from 'zod';
+import { UserFacingError } from '@/lib/errors';
 
 /**
  * One result shape for every server action.
@@ -11,6 +13,9 @@ import { type z } from 'zod';
 export type ActionResult<T = undefined> =
   | { ok: true; data: T; message?: string }
   | { ok: false; error: string; fieldErrors?: Record<string, string[]>; needsConfirmation?: boolean };
+
+/** What the browser is told when the thrown error was not written for a reader. */
+const GENERIC_ERROR = 'Something went wrong. Please try again.';
 
 export function ok<T>(data: T, message?: string): ActionResult<T> {
   return { ok: true, data, message };
@@ -40,6 +45,14 @@ export function fromZodError(error: z.ZodError): ActionResult<never> {
   return { ok: false, error: message, fieldErrors };
 }
 
+/** Prisma puts its error class on `code`; anything else may or may not have one. */
+function errorCode(error: unknown): unknown {
+  if (error && typeof error === 'object' && 'code' in error) {
+    return (error as { code?: unknown }).code;
+  }
+  return undefined;
+}
+
 /**
  * Wraps an action body: validates input, runs it, and converts anything thrown
  * into a friendly result.
@@ -56,20 +69,27 @@ export async function runAction<TInput, TOutput>(
     return await handler(parsed.data);
   } catch (error) {
     // Next uses thrown values for redirect() and notFound(); never swallow them.
-    if (
-      error &&
-      typeof error === 'object' &&
-      'digest' in error &&
-      typeof (error as { digest?: unknown }).digest === 'string' &&
-      ((error as { digest: string }).digest.startsWith('NEXT_REDIRECT') ||
-        (error as { digest: string }).digest === 'NEXT_NOT_FOUND')
-    ) {
-      throw error;
-    }
+    // `unstable_rethrow` is the framework's own test for those, so it also covers
+    // the request-time bailouts that the digest check it replaces did not, and it
+    // keeps working when Next changes the shape of them.
+    unstable_rethrow(error);
 
-    console.error('[action]', error);
-    const message =
-      error instanceof Error && error.message ? error.message : 'Something went wrong. Please try again.';
-    return fail(message);
+    // Only our own sentences reach the browser. Everything else thrown on the
+    // server was written for a developer: a Prisma failure carries constraint
+    // names, table names and the query arguments, and those arguments are the
+    // food and weight data the whole application exists to keep on one machine.
+    const userFacing = error instanceof UserFacingError;
+
+    // The error object itself is not logged, because logging it invites a
+    // console that prints the attached query arguments. The stack's first line
+    // already carries the message for the errors whose message is withheld here.
+    console.error('[action]', {
+      name: error instanceof Error ? error.name : typeof error,
+      code: errorCode(error),
+      message: userFacing ? error.message : undefined,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+
+    return fail(userFacing && error.message ? error.message : GENERIC_ERROR);
   }
 }
