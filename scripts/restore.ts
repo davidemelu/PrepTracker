@@ -72,9 +72,16 @@ async function main() {
 
   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
   try {
-    for (const user of users) {
-      const result = await restoreBackupWith(prisma, user.id, backup);
-      console.log(`Restored ${result.total} rows for "${user.username}".`);
+    // The backup carries exactly one account. Restoring it into an existing
+    // install replaces that account's data in place; into a fresh one it
+    // recreates it. Either way every row ends up owned by the target id.
+    const target = await prisma.user.findUnique({ where: { id: users[0]!.id } });
+    const userId = target?.id ?? users[0]!.id;
+
+    const result = await restoreBackupWith(prisma, userId, backup);
+    console.log(`Restored ${result.total} rows for "${result.username}".`);
+    if (result.credentialsChanged) {
+      console.log('The password came from the backup; sign in with the one it was taken with.');
     }
   } finally {
     await prisma.$disconnect();

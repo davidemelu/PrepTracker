@@ -14,13 +14,14 @@ import {
  * Prisma client.
  */
 
-export { BACKUP_VERSION, toCsv } from '@/lib/backup/core';
+export { BACKUP_VERSION, BackupValidationError, toCsv } from '@/lib/backup/core';
 export type { BackupFile, RestoreResult } from '@/lib/backup/core';
 
 export function exportBackup(userId: string): Promise<BackupFile> {
   return exportBackupWith(prisma, userId);
 }
 
-export function restoreBackup(userId: string, backup: BackupFile): Promise<RestoreResult> {
+/** `backup` is whatever was parsed out of the uploaded file; it is validated first. */
+export function restoreBackup(userId: string, backup: unknown): Promise<RestoreResult> {
   return restoreBackupWith(prisma, userId, backup);
 }
