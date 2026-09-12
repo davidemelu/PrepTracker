@@ -3,11 +3,13 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
+import { UserFacingError } from '@/lib/errors';
 import { requireUserId } from '@/lib/auth/guards';
 import { validateYieldPct } from '@/lib/domain/yield';
 import {
   checkbox,
   cuid,
+  idSchema,
   nonEmptyName,
   numberish,
   optionalCuid,
@@ -186,26 +188,60 @@ export async function saveFood(input: unknown): Promise<ActionResult<{ id: strin
   });
 }
 
-const idSchema = z.object({ id: cuid });
+
+const deleteFoodSchema = z.object({ id: cuid, confirm: z.boolean().optional() });
 
 /**
- * Deleting a food removes it from the plan but leaves every past day intact:
- * journal rows keep the snapshot name and quantity.
+ * Delete a food.
+ *
+ * The database refuses to delete a food the plan still uses (`onDelete:
+ * Restrict`), so removing those lines is an explicit step here rather than a
+ * cascade nobody sees. Which meals lose a line is said before anything is
+ * deleted, not reported afterwards.
+ *
+ * Past days are untouched either way: journal rows keep their own copy of the
+ * name, quantity and macros, and only the link back to the food is cleared.
  */
-export async function deleteFood(input: { id: string }): Promise<ActionResult<undefined>> {
-  return runAction(idSchema, input, async ({ id }) => {
+export async function deleteFood(input: {
+  id: string;
+  confirm?: boolean;
+}): Promise<ActionResult<undefined>> {
+  return runAction(deleteFoodSchema, input, async ({ id, confirm }) => {
     const userId = await requireUserId();
     const food = await prisma.food.findFirst({ where: { id, userId } });
     if (!food) return fail('That food could not be found.');
 
-    const usedIn = await prisma.mealIngredient.count({ where: { foodId: id } });
-    await prisma.food.delete({ where: { id } });
+    const usedIn = await prisma.mealIngredient.findMany({
+      where: { foodId: id, meal: { mealPlan: { userId } } },
+      select: { id: true, meal: { select: { name: true } } },
+    });
+
+    if (usedIn.length > 0 && !confirm) {
+      const meals = [...new Set(usedIn.map((row) => row.meal.name))];
+      const named =
+        meals.length === 1
+          ? meals[0]
+          : `${meals.slice(0, -1).join(', ')} and ${meals[meals.length - 1]}`;
+      return fail(
+        `${food.name} is an ingredient of ${named}. Deleting it removes ${
+          usedIn.length === 1 ? 'that line' : 'those lines'
+        } from the plan. Days you have already logged keep their record.`,
+        { needsConfirmation: true },
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.mealIngredient.deleteMany({
+        where: { foodId: id, meal: { mealPlan: { userId } } },
+      });
+      await tx.food.delete({ where: { id } });
+    });
 
     revalidateFoods();
     return ok(
       undefined,
-      usedIn > 0
-        ? `${food.name} deleted and removed from ${usedIn} plan ingredient${usedIn === 1 ? '' : 's'}. Past days are unchanged.`
+      usedIn.length > 0
+        ? `${food.name} deleted and removed from ${usedIn.length} plan ingredient${usedIn.length === 1 ? '' : 's'}. Past days are unchanged.`
         : `${food.name} deleted.`,
     );
   });
@@ -269,7 +305,7 @@ export async function saveOptionGroup(input: unknown): Promise<ActionResult<{ id
 
       if (id) {
         const existing = await tx.foodOptionGroup.findFirst({ where: { id, userId } });
-        if (!existing) throw new Error('That group could not be found.');
+        if (!existing) throw new UserFacingError('That group could not be found.');
         await tx.foodOptionGroup.update({
           where: { id },
           data: { name: values.name, notes: values.notes ?? null, preferredFoodId: preferred },

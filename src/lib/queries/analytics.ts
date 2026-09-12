@@ -5,12 +5,14 @@ import {
   addDays,
   dayRange,
   fromDbDate,
+  toDayKey,
   toDbDate,
   todayKey,
   type DayKey,
 } from '@/lib/domain/dates';
 import { completionByMeal, weekStats, type DaySummary, type WeekStats } from '@/lib/domain/adherence';
 import { focusFrequency, type DayWorkout, type WorkoutHistoryEntry } from '@/lib/domain/workout';
+import { effectiveYield, type YieldObservation } from '@/lib/domain/yield';
 
 /**
  * Read models for the weekly tracker, history and analytics.
@@ -115,21 +117,43 @@ export interface PeriodStats extends WeekStats {
 }
 
 /**
- * Days that should count towards adherence: stored, and not in the future.
+ * Days that actually happened: stored, and not in the future.
  *
  * A day only has to exist to be stored — merely opening tomorrow, or letting
- * Next prefetch the "Tomorrow" link, materialises it. Counting those would
- * score every meal you have not eaten yet as missed and quietly drag the week
- * down.
+ * Next prefetch the "Tomorrow" link, materialises it. What is reported about
+ * those days would be entirely blank.
+ *
+ * This is the right filter for anything that reports a fact: how much water was
+ * drunk, what was trained, how a day felt. Today belongs in all of those the
+ * moment it starts.
  */
-function countableDays(rows: readonly DayRow[], today: DayKey): DayRow[] {
+function trackedDays(rows: readonly DayRow[], today: DayKey): DayRow[] {
   return rows.filter((row) => row.exists && row.date <= today);
+}
+
+/**
+ * Days that can be scored. Everything above, and today only once it is over.
+ *
+ * At nine in the morning four of the day's five meals have not happened yet.
+ * Counting them as missed made adherence worse the earlier in the day you
+ * looked at it, and pulled the week's average down with it. Today joins the
+ * scoring once nothing on it is still pending — which is also the moment its
+ * score stops moving on its own.
+ */
+function scoredDays(rows: readonly DayRow[], today: DayKey): DayRow[] {
+  return trackedDays(rows, today).filter((row) => {
+    if (row.date < today) return true;
+    return (
+      row.meals.every((meal) => meal.status !== 'PENDING') &&
+      row.supplements.every((dose) => dose.status !== 'PENDING')
+    );
+  });
 }
 
 export async function getPeriodStats(userId: string, from: DayKey, to: DayKey): Promise<PeriodStats> {
   const rows = await getDayRows(userId, from, to);
   const today = todayKey();
-  const countable = countableDays(rows, today);
+  const countable = scoredDays(rows, today);
 
   return {
     ...weekStats(countable),
@@ -145,7 +169,7 @@ export interface WaterPoint {
 }
 
 export async function getWaterTrend(userId: string, from: DayKey, to: DayKey): Promise<WaterPoint[]> {
-  const rows = countableDays(await getDayRows(userId, from, to), todayKey());
+  const rows = trackedDays(await getDayRows(userId, from, to), todayKey());
   return rows.map((row) => ({ date: row.date, totalMl: row.waterMl, targetMl: row.waterTargetMl }));
 }
 
@@ -169,7 +193,7 @@ export async function getWeeklyAdherence(
   for (let i = weeks - 1; i >= 0; i -= 1) {
     const weekStart = addDays(endDate, -7 * i - 6);
     const weekEnd = addDays(weekStart, 6);
-    const rows = countableDays(await getDayRows(userId, weekStart, weekEnd), todayKey());
+    const rows = scoredDays(await getDayRows(userId, weekStart, weekEnd), todayKey());
     if (rows.length === 0) continue;
 
     const stats = weekStats(rows);
@@ -187,7 +211,7 @@ export async function getWeeklyAdherence(
 }
 
 export async function getMealCompletionBreakdown(userId: string, from: DayKey, to: DayKey) {
-  const rows = countableDays(await getDayRows(userId, from, to), todayKey());
+  const rows = scoredDays(await getDayRows(userId, from, to), todayKey());
   return completionByMeal(rows);
 }
 
@@ -258,7 +282,9 @@ export async function getYieldHistory(userId: string): Promise<YieldPoint[]> {
       currentPct: row.food?.cookingYieldPct ?? null,
     };
     entry.points.push({
-      date: row.recordedAt.toISOString().slice(0, 10),
+      // Local, not UTC: a batch weighed at 20:00 in Vancouver belongs to that
+      // evening, not to the next calendar day the UTC slice would give it.
+      date: toDayKey(row.recordedAt),
       yieldPct: row.yieldPct,
       source: row.source,
     });
@@ -267,14 +293,20 @@ export async function getYieldHistory(userId: string): Promise<YieldPoint[]> {
   }
 
   return [...byFood.values()]
-    .map((entry) => {
-      const measured = entry.points.filter((p) => p.source === 'MEASURED');
-      const pool = measured.length > 0 ? measured : entry.points;
-      return {
-        ...entry,
-        averagePct: Math.round((pool.reduce((sum, p) => sum + p.yieldPct, 0) / pool.length) * 10) / 10,
-      };
-    })
+    .map((entry) => ({
+      ...entry,
+      // The same rule that sets the food's own yield, so History and Prep
+      // cannot show two different averages for the same protein.
+      averagePct:
+        effectiveYield(
+          entry.points.map((point) => ({
+            yieldPct: point.yieldPct,
+            recordedAt: point.date,
+            source: point.source as YieldObservation['source'],
+          })),
+          entry.currentPct,
+        ) ?? 0,
+    }))
     .sort((a, b) => a.foodName.localeCompare(b.foodName));
 }
 
@@ -287,7 +319,7 @@ export async function getWorkoutFrequency(
   from: DayKey,
   to: DayKey,
 ): Promise<Array<{ name: string; sessions: number }>> {
-  const rows = countableDays(await getDayRows(userId, from, to), todayKey());
+  const rows = trackedDays(await getDayRows(userId, from, to), todayKey());
 
   const entries: WorkoutHistoryEntry[] = rows.map((row) => ({
     date: row.date,

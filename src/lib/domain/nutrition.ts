@@ -69,12 +69,20 @@ export function macrosForQuantity(
   quantity: number,
   unit: string,
 ): Macros {
-  if (!source || source.basisQty <= 0) return { ...EMPTY_MACROS };
+  if (!source || !Number.isFinite(source.basisQty) || source.basisQty <= 0) {
+    return { ...EMPTY_MACROS };
+  }
 
   const converted = convert(quantity, unit, source.basisUnit);
   if (converted === null) return { ...EMPTY_MACROS };
 
   const factor = converted / source.basisQty;
+  // A quantity that is not a real number gives an unknown portion, not a zero
+  // one. Without this guard `round` turns NaN into 0 and the item is snapshotted
+  // into the day as 0 kcal, which reads as "this food has no calories" rather
+  // than "this could not be worked out".
+  if (!Number.isFinite(factor)) return { ...EMPTY_MACROS };
+
   const scale = (value: number | null | undefined): number | null =>
     value == null || !Number.isFinite(value) ? null : round(value * factor, 2);
 

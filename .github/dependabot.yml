@@ -1,0 +1,60 @@
+version: 2
+
+# Weekly, grouped, and never automatic. Dependabot proposes; CI proves; a human
+# merges. Minor and patch updates arrive as one pull request per ecosystem
+# because reviewing thirty separate patch bumps is how a maintainer stops
+# reviewing them at all. Majors stay separate: each one gets its own pull
+# request and a read of the changelog.
+
+updates:
+  - package-ecosystem: npm
+    directory: '/'
+    schedule:
+      interval: weekly
+      day: monday
+      time: '07:00'
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 5
+    # The manifest pins exact versions on purpose, so the pin itself has to move.
+    versioning-strategy: increase
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps-dev)'
+    groups:
+      npm-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  # Base images in the Dockerfile: node:22-alpine and postgres:16-alpine.
+  - package-ecosystem: docker
+    directory: '/'
+    schedule:
+      interval: weekly
+      day: monday
+      time: '07:00'
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: 'chore(docker)'
+    groups:
+      docker-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: weekly
+      day: monday
+      time: '07:00'
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: 'chore(ci)'
+    groups:
+      actions-minor-and-patch:
+        update-types:
+          - minor
+          - patch

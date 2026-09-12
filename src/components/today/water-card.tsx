@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Droplets, Minus, MoreHorizontal, Plus, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { addWater, deleteWaterEntry, undoLastWater } from '@/lib/actions/water';
-import { formatWater } from '@/lib/domain/water';
+import { formatWater, progressFromTotal } from '@/lib/domain/water';
 import { useAction } from '@/lib/hooks/use-action';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -80,9 +80,13 @@ export function WaterCard({ date, water, quickAddA, quickAddB }: WaterCardProps)
     add.run({ date, amountMl });
   };
 
-  const percent = water.targetMl > 0 ? Math.min(100, (optimisticMl / water.targetMl) * 100) : 0;
-  const remaining = Math.max(0, water.targetMl - optimisticMl);
-  const reached = water.targetMl > 0 && optimisticMl >= water.targetMl;
+  // Recomputed here rather than read off `water`, because the optimistic total
+  // moves before the server answers — but through the same function the server
+  // used, so a tap and the reload that follows it cannot disagree.
+  const progress = progressFromTotal(optimisticMl, water.targetMl);
+  const percent = progress.percentCapped;
+  const remaining = progress.remainingMl;
+  const reached = progress.goalReached;
   const lastEntry = water.entries.length > 0 ? water.entries[water.entries.length - 1] : null;
 
   const submitCustom = () => {

@@ -173,6 +173,156 @@ describe('ensureDailyPlan', () => {
     expect(await prisma.waterEntry.count({ where: { dailyPlanId: id } })).toBe(1);
   });
 
+  it('leaves an eaten meal exactly as logged when the day is rebuilt', async () => {
+    const prisma = testPrisma();
+    const id = await dayService.ensureDailyPlan(fixture.userId, '2026-09-14');
+
+    const mealA = await prisma.dailyMeal.findFirstOrThrow({
+      where: { dailyPlanId: id, name: 'Meal A' },
+    });
+
+    // Eaten, with a swap and an adjusted amount: exactly the state a rebuild
+    // used to throw away by re-portioning from the plan.
+    await prisma.dailyMealItem.updateMany({
+      where: { dailyMealId: mealA.id, foodName: 'White rice' },
+      data: { quantity: 300, isQuantityOverridden: true },
+    });
+    await prisma.dailyMeal.update({
+      where: { id: mealA.id },
+      data: { status: 'COMPLETED', completedAt: new Date(), actualTime: '12:42' },
+    });
+    await prisma.mealCompletion.create({
+      data: { dailyMealId: mealA.id, action: 'COMPLETED' },
+    });
+
+    await dayService.ensureDailyPlan(fixture.userId, '2026-09-14', { regenerate: true });
+
+    const after = await prisma.dailyMeal.findFirstOrThrow({
+      where: { dailyPlanId: id, name: 'Meal A' },
+      include: { items: true, completions: true },
+    });
+
+    // Same row, same plate, same audit trail.
+    expect(after.id).toBe(mealA.id);
+    expect(after.status).toBe('COMPLETED');
+    expect(after.actualTime).toBe('12:42');
+    expect(after.items.find((i) => i.foodName === 'White rice')!.quantity).toBe(300);
+    expect(after.items.find((i) => i.foodName === 'White rice')!.isQuantityOverridden).toBe(true);
+    expect(after.completions).toHaveLength(1);
+  });
+
+  it('re-portions the meals still to come', async () => {
+    const prisma = testPrisma();
+    const id = await dayService.ensureDailyPlan(fixture.userId, '2026-09-14');
+
+    await prisma.dailyMeal.updateMany({
+      where: { dailyPlanId: id, name: 'Meal A' },
+      data: { status: 'COMPLETED', completedAt: new Date() },
+    });
+
+    await dayService.ensureDailyPlan(fixture.userId, '2026-09-14', {
+      dayTypeId: fixture.restId,
+      regenerate: true,
+    });
+
+    const meals = await prisma.dailyMeal.findMany({
+      where: { dailyPlanId: id },
+      include: { items: true },
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    // Meal A was eaten on training portions and keeps them; Meal B was not, so
+    // it takes the rest-day amount.
+    expect(meals[0]!.items.find((i) => i.foodName === 'White rice')!.quantity).toBe(225);
+    expect(meals[1]!.items.find((i) => i.foodName === 'Bagels')!.quantity).toBe(1);
+  });
+
+  it('keeps a logged meal the new day type no longer includes', async () => {
+    const prisma = testPrisma();
+    const id = await dayService.ensureDailyPlan(fixture.userId, '2026-09-14');
+
+    const mealB = await prisma.dailyMeal.findFirstOrThrow({
+      where: { dailyPlanId: id, name: 'Meal B' },
+    });
+    await prisma.dailyMeal.update({
+      where: { id: mealB.id },
+      data: { status: 'COMPLETED', completedAt: new Date() },
+    });
+    await prisma.mealCompletion.create({
+      data: { dailyMealId: mealB.id, action: 'COMPLETED' },
+    });
+
+    // Drop Meal B from rest days entirely, then switch the day to rest.
+    await prisma.mealDayTypeSetting.updateMany({
+      where: { mealId: fixture.mealIds.mealB!, dayTypeId: fixture.restId },
+      data: { included: false },
+    });
+
+    await dayService.ensureDailyPlan(fixture.userId, '2026-09-14', {
+      dayTypeId: fixture.restId,
+      regenerate: true,
+    });
+
+    // It is no longer in the plan for this day type, but it was eaten, so it
+    // stays on the record rather than vanishing.
+    const survivor = await prisma.dailyMeal.findUnique({
+      where: { id: mealB.id },
+      include: { completions: true },
+    });
+    expect(survivor).not.toBeNull();
+    expect(survivor!.status).toBe('COMPLETED');
+    expect(survivor!.completions).toHaveLength(1);
+  });
+
+  it('drops a pending meal the new day type no longer includes', async () => {
+    const prisma = testPrisma();
+    const id = await dayService.ensureDailyPlan(fixture.userId, '2026-09-14');
+
+    await prisma.mealDayTypeSetting.updateMany({
+      where: { mealId: fixture.mealIds.mealB!, dayTypeId: fixture.restId },
+      data: { included: false },
+    });
+
+    await dayService.ensureDailyPlan(fixture.userId, '2026-09-14', {
+      dayTypeId: fixture.restId,
+      regenerate: true,
+    });
+
+    // Nothing was ever recorded against it, so it is just a plan artefact.
+    const meals = await prisma.dailyMeal.findMany({ where: { dailyPlanId: id } });
+    expect(meals.map((m) => m.name)).toEqual(['Meal A']);
+  });
+
+  it('keeps a pending meal that was completed and then undone', async () => {
+    const prisma = testPrisma();
+    const id = await dayService.ensureDailyPlan(fixture.userId, '2026-09-14');
+
+    const mealB = await prisma.dailyMeal.findFirstOrThrow({
+      where: { dailyPlanId: id, name: 'Meal B' },
+    });
+    await prisma.mealCompletion.createMany({
+      data: [
+        { dailyMealId: mealB.id, action: 'COMPLETED' },
+        { dailyMealId: mealB.id, action: 'UNDONE' },
+      ],
+    });
+
+    await prisma.mealDayTypeSetting.updateMany({
+      where: { mealId: fixture.mealIds.mealB!, dayTypeId: fixture.restId },
+      data: { included: false },
+    });
+
+    await dayService.ensureDailyPlan(fixture.userId, '2026-09-14', {
+      dayTypeId: fixture.restId,
+      regenerate: true,
+    });
+
+    // Pending, but something happened to it: the log says so and must survive.
+    const survivor = await prisma.dailyMeal.findUnique({ where: { id: mealB.id } });
+    expect(survivor).not.toBeNull();
+    expect(await prisma.mealCompletion.count({ where: { dailyMealId: mealB.id } })).toBe(2);
+  });
+
   it('snapshots macros so later nutrition edits do not move past totals', async () => {
     const prisma = testPrisma();
     const id = await dayService.ensureDailyPlan(fixture.userId, '2026-09-14');

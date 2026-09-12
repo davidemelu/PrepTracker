@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import { deleteWorkoutFocus, saveWorkoutFocus, setScheduledWorkout } from '@/lib/actions/workout';
 import { weekdayName } from '@/lib/domain/dates';
@@ -15,6 +14,7 @@ import {
 } from '@/lib/domain/workout';
 import { useAction } from '@/lib/hooks/use-action';
 import { Badge } from '@/components/ui/badge';
+import { FieldError } from '@/components/ui/field-error';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DeleteButton } from '@/components/ui/delete-button';
@@ -47,12 +47,10 @@ export function WorkoutsManager({
   focuses: WorkoutFocusLike[];
   weekdays: WeekdayWorkout[];
 }) {
-  const router = useRouter();
   const [editingFocus, setEditingFocus] = useState<WorkoutFocusLike | null>(null);
   const [addingFocus, setAddingFocus] = useState(false);
   const [editingDay, setEditingDay] = useState<WeekdayWorkout | null>(null);
 
-  const refresh = () => router.refresh();
   const groups = groupFocuses(focuses.filter((f) => f.active));
   const inactive = focuses.filter((f) => !f.active);
 
@@ -130,7 +128,7 @@ export function WorkoutsManager({
                     key={focus.id}
                     type="button"
                     onClick={() => setEditingFocus(focus)}
-                    className="h-10 rounded-lg border border-border px-3 text-sm transition-colors hover:bg-accent"
+                    className="min-h-11 rounded-lg border border-border px-3 text-sm transition-colors hover:bg-accent"
                   >
                     {focus.name}
                     {focus.preWorkoutMinutes != null ? (
@@ -155,7 +153,7 @@ export function WorkoutsManager({
                     key={focus.id}
                     type="button"
                     onClick={() => setEditingFocus(focus)}
-                    className="h-10 rounded-lg border border-dashed border-border px-3 text-sm text-muted-foreground"
+                    className="min-h-11 rounded-lg border border-dashed border-border px-3 text-sm text-muted-foreground"
                   >
                     {focus.name}
                   </button>
@@ -173,14 +171,12 @@ export function WorkoutsManager({
           setAddingFocus(false);
           setEditingFocus(null);
         }}
-        onDone={refresh}
       />
 
       <WeekdaySheet
         day={editingDay}
         focuses={focuses}
         onClose={() => setEditingDay(null)}
-        onDone={refresh}
       />
     </div>
   );
@@ -190,12 +186,10 @@ function FocusSheet({
   open,
   focus,
   onClose,
-  onDone,
 }: {
   open: boolean;
   focus: WorkoutFocusLike | null;
   onClose: () => void;
-  onDone: () => void;
 }) {
   const [name, setName] = useState(focus?.name ?? '');
   const [category, setCategory] = useState<WorkoutFocusCategoryKey>(focus?.category ?? 'MUSCLE_GROUP');
@@ -214,10 +208,7 @@ function FocusSheet({
     setPreWorkout(focus?.preWorkoutMinutes != null ? String(focus.preWorkoutMinutes) : '');
   }
 
-  const finish = () => {
-    onDone();
-    onClose();
-  };
+  const finish = () => onClose();
 
   const save = useAction(saveWorkoutFocus, { onSuccess: finish });
   const remove = useAction(deleteWorkoutFocus, { onSuccess: finish });
@@ -235,7 +226,7 @@ function FocusSheet({
               placeholder="Rear delts"
             />
             {save.fieldErrors.name ? (
-              <p className="text-sm text-destructive">{save.fieldErrors.name[0]}</p>
+              <FieldError>{save.fieldErrors.name[0]}</FieldError>
             ) : null}
           </div>
 
@@ -268,7 +259,7 @@ function FocusSheet({
               focuses, the longest gap wins.
             </p>
             {save.fieldErrors.preWorkoutMinutes ? (
-              <p className="text-sm text-destructive">{save.fieldErrors.preWorkoutMinutes[0]}</p>
+              <FieldError>{save.fieldErrors.preWorkoutMinutes[0]}</FieldError>
             ) : null}
           </div>
 
@@ -293,7 +284,7 @@ function FocusSheet({
             />
           ) : null}
 
-          {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
+          {save.error ? <FieldError>{save.error}</FieldError> : null}
         </div>
 
         <SheetFooter>
@@ -325,12 +316,10 @@ function WeekdaySheet({
   day,
   focuses,
   onClose,
-  onDone,
 }: {
   day: WeekdayWorkout | null;
   focuses: WorkoutFocusLike[];
   onClose: () => void;
-  onDone: () => void;
 }) {
   const [selected, setSelected] = useState<string[]>(day?.focusIds ?? []);
   const [name, setName] = useState(day?.workoutName ?? '');
@@ -342,12 +331,7 @@ function WeekdaySheet({
     setName(day?.workoutName ?? '');
   }
 
-  const save = useAction(setScheduledWorkout, {
-    onSuccess: () => {
-      onDone();
-      onClose();
-    },
-  });
+  const save = useAction(setScheduledWorkout, { onSuccess: onClose });
 
   const groups = groupFocuses(focuses.filter((f) => f.active));
 
@@ -401,7 +385,7 @@ function WeekdaySheet({
             </fieldset>
           ))}
 
-          {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
+          {save.error ? <FieldError>{save.error}</FieldError> : null}
         </div>
 
         <SheetFooter>

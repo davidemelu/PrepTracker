@@ -7,6 +7,7 @@ import {
   groupByCategory,
   groupByDepartment,
   resolveIngredientFood,
+  shoppingProgress,
   type FoodInfo,
   type GroceryGenerationInput,
   type PlanMeal,
@@ -418,6 +419,7 @@ describe('inventory subtraction', () => {
           requiredUnit: 'g',
           cookedQty: null,
           rawQty: null,
+          rawForCookedQty: null,
           yieldPctUsed: null,
           missingYield: false,
           shoppingQty: 500,
@@ -505,5 +507,95 @@ describe('cookingRequirements', () => {
 
     // Bagels are not cooked, so they never appear here.
     expect(requirements.find((r) => r.foodName === 'Bagels')).toBeUndefined();
+  });
+
+  it('tells the cook the raw weight for the batch, not the shopping total', () => {
+    // The same food two ways in one day: 175 g cooked in one meal and 100 g
+    // bought raw in another. Shopping needs 175/0.75 + 100 = 333.33 g; the pan
+    // needs only the 233.33 g that cooks down to 175 g.
+    const input: GroceryGenerationInput = {
+      meals: [
+        {
+          id: 'm1',
+          name: 'Cooked meal',
+          includedDayTypeIds: [TRAINING],
+          ingredients: [
+            {
+              id: 'i1',
+              foodId: 'chicken',
+              optionGroupId: null,
+              unit: 'g',
+              state: 'COOKED',
+              required: true,
+              quantityByDayType: { [TRAINING]: 175 },
+            },
+          ],
+        },
+        {
+          id: 'm2',
+          name: 'Raw meal',
+          includedDayTypeIds: [TRAINING],
+          ingredients: [
+            {
+              id: 'i2',
+              foodId: 'chicken',
+              optionGroupId: null,
+              unit: 'g',
+              state: 'RAW',
+              required: true,
+              quantityByDayType: { [TRAINING]: 100 },
+            },
+          ],
+        },
+      ],
+      dayTypeCounts: [{ dayTypeId: TRAINING, dayTypeName: 'Training', days: 1 }],
+      foods,
+    };
+
+    const line = generateGroceryList(input).lines.find((l) => l.name === 'Chicken breast')!;
+    expect(line.cookedQty).toBe(175);
+    expect(line.shoppingQty).toBe(333.33);
+    expect(line.rawQty).toBe(333.33);
+    expect(line.rawForCookedQty).toBe(233.33);
+
+    const requirement = cookingRequirements(input).find((r) => r.foodName === 'Chicken breast')!;
+    expect(requirement.cookedQty).toBe(175);
+    expect(requirement.rawQty).toBe(233.33);
+  });
+
+  it('leaves the raw weight unknown when the yield is missing', () => {
+    const noYield: GroceryGenerationInput = {
+      ...baseInput,
+      foods: { ...foods, chicken: { ...foods.chicken!, cookingYieldPct: null } },
+    };
+    const line = generateGroceryList(noYield).lines.find((l) => l.name === 'Chicken breast')!;
+    expect(line.missingYield).toBe(true);
+    expect(line.rawForCookedQty).toBeNull();
+
+    const requirement = cookingRequirements(noYield).find((r) => r.foodName === 'Chicken breast')!;
+    expect(requirement.rawQty).toBeNull();
+    // Still flagged as a yield-tracked food so Prep can say the yield is unset.
+    expect(requirement.tracksYield).toBe(true);
+  });
+});
+
+describe('shoppingProgress', () => {
+  const item = (purchased: boolean, haveAlready = false) => ({ purchased, haveAlready });
+
+  it('counts what is in the trolley and what was already in the cupboard', () => {
+    const progress = shoppingProgress([item(true), item(false, true), item(false), item(false)]);
+    expect(progress.total).toBe(4);
+    expect(progress.done).toBe(2);
+    expect(progress.remaining).toBe(2);
+    expect(progress.percent).toBe(50);
+  });
+
+  it('reports an empty list as nothing done rather than everything done', () => {
+    expect(shoppingProgress([]).percent).toBe(0);
+  });
+
+  it('reaches 100 only when nothing is left', () => {
+    expect(shoppingProgress([item(true), item(true)]).percent).toBe(100);
+    expect(shoppingProgress([item(true), item(false)]).percent).toBe(50);
   });
 });

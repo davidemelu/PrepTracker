@@ -45,6 +45,7 @@ The hard rule: **`src/lib/domain` may not import Prisma, Next, or React.** Every
 | --- | --- |
 | `units.ts` | unit registry, mass/volume/count conversion, display formatting |
 | `schedule.ts` | generate meal times from first meal / interval / workout / bedtime |
+| `time.ts` | clock arithmetic, and the one definition of "overdue" |
 | `materialise.ts` | plan + day type -> the concrete list of meals and items for a date |
 | `yield.ts` | raw↔cooked conversion, measured yield, portion counts |
 | `grocery.ts` | expand N days into line items, aggregate, subtract inventory, package estimates |
@@ -54,7 +55,7 @@ The hard rule: **`src/lib/domain` may not import Prisma, Next, or React.** Every
 | `storage.ts` | fridge/freezer/thaw dates, "move tomorrow's meals" decisions |
 | `reminders.ts` | due/overdue descriptors for meals, supplements, water, thawing, prep, shopping |
 
-## 4. Data model (30 tables)
+## 4. Data model (35 tables)
 
 Four families:
 
@@ -68,12 +69,40 @@ Four families:
 
 Journal tables keep `sourceMealId`/`foodId` as **nullable, `onDelete: SetNull`** references plus a denormalised `name`/`quantity`/`unit`/`state` snapshot. Deleting a food from the plan therefore never deletes or corrupts what was eaten in March.
 
+Two relations are deliberately `onDelete: Restrict`, so the database refuses
+what the application should never ask for:
+
+- `MealCompletion` → `DailyMeal` and `SupplementCompletion` → `DailySupplement`.
+  These logs are the record of what was actually done. Rebuilding a day updates
+  meal rows in place rather than replacing them, and a row that carries a
+  recorded action is never deleted at all; the constraint is there so a future
+  change cannot quietly reintroduce the cascade.
+- `MealIngredient` → `Food`. Deleting a food the plan still uses is an explicit
+  step that names the meals losing a line, not a cascade nobody sees.
+
+Deleting an account is therefore an ordered delete rather than one cascade, which
+is what `restoreBackupWith` does before it writes.
+
+### Backup validation
+
+A backup file is untrusted input. `lib/backup/schema.ts` builds its rules from
+the generated data model, so they cannot drift from the schema: only columns that
+exist are accepted, scalars must match their column type, every `userId` is
+rewritten to the account running the restore, and every other foreign key must
+resolve inside the same file. A rejection happens before anything is written and
+names the table and the column, never the value.
+
 ## 5. Day lifecycle
 
 1. `getOrCreateDailyPlan(date)` — resolves the day type from `ScheduleDay` (weekly pattern) unless the day already has an explicit override.
 2. Materialisation copies the active plan's meals for that day type, resolving each option group to the preferred food, and stamps scheduled times from `Settings` + per-meal overrides.
 3. The day is now independent. Editing the plan, deleting a food, or changing the water target does not alter it.
-4. Re-materialising is explicit and opt-in (`Regenerate day`), and preserves completions where the meal still exists.
+4. Re-materialising is explicit and opt-in (`Regenerate day`), and reconciles row
+   by row: a pending meal is re-timed and re-portioned, a meal eaten or skipped
+   keeps its items, times and name, and a meal that has fallen out of the plan is
+   removed only when it is pending and nothing was ever recorded against it.
+   There is no path that rewrites a logged meal, and past dates cannot be
+   rebuilt at all.
 
 ## 6. Substitutions
 

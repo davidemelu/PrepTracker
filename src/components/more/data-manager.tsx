@@ -1,11 +1,11 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { AlertTriangle, Download, Upload } from 'lucide-react';
 import { restoreFromBackup } from '@/lib/actions/data';
 import { useAction } from '@/lib/hooks/use-action';
 import { Button } from '@/components/ui/button';
+import { FieldError } from '@/components/ui/field-error';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/primitives';
@@ -25,7 +25,6 @@ const CSV_EXPORTS = [
  * for anything you want to look at in a spreadsheet.
  */
 export function DataManager() {
-  const router = useRouter();
   const fileInput = useRef<HTMLInputElement>(null);
   const [json, setJson] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -37,7 +36,6 @@ export function DataManager() {
       setFileName(null);
       setConfirm('');
       if (fileInput.current) fileInput.current.value = '';
-      router.refresh();
     },
   });
 
@@ -137,7 +135,7 @@ export function DataManager() {
             />
           </div>
 
-          {restore.error ? <p className="text-sm text-destructive">{restore.error}</p> : null}
+          {restore.error ? <FieldError>{restore.error}</FieldError> : null}
 
           <Button
             variant="destructive"

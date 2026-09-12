@@ -4,6 +4,7 @@ import { ShoppingBasket } from 'lucide-react';
 import { requireUser } from '@/lib/auth/guards';
 import { prisma } from '@/lib/db';
 import { formatDayShort, fromDbDate } from '@/lib/domain/dates';
+import { shoppingProgress } from '@/lib/domain/grocery';
 import { PageBody, PageHeader } from '@/components/layout/page-header';
 import { GroceryList, type GroceryItemRow } from '@/components/groceries/grocery-list';
 import { WeekActions } from '@/components/groceries/week-actions';
@@ -27,10 +28,7 @@ export default async function GroceryWeekPage({ params }: { params: Promise<{ we
 
   if (!week) notFound();
 
-  const total = week.items.length;
-  const done = week.items.filter((i) => i.purchased || i.haveAlready).length;
-  const remaining = total - done;
-  const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+  const { remaining, percent } = shoppingProgress(week.items);
 
   return (
     <>

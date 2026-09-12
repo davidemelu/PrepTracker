@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { AlertTriangle, ChevronRight, Plus } from 'lucide-react';
 import {
   deleteGroceryItem,
@@ -15,6 +14,7 @@ import { formatAmount } from '@/lib/domain/units';
 import { UNIT_DEFINITIONS } from '@/lib/domain/units';
 import { useAction } from '@/lib/hooks/use-action';
 import { Badge } from '@/components/ui/badge';
+import { FieldError } from '@/components/ui/field-error';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { DeleteButton } from '@/components/ui/delete-button';
@@ -65,7 +65,6 @@ function ItemForm({
   onDone: () => void;
   onCancel: () => void;
 }) {
-  const router = useRouter();
   const [name, setName] = useState(initial?.name ?? '');
   const [category, setCategory] = useState<FoodCategoryKey>(initial?.category ?? 'OTHER');
   const [department, setDepartment] = useState(initial?.department ?? '');
@@ -74,7 +73,6 @@ function ItemForm({
   const [notes, setNotes] = useState(initial?.notes ?? '');
 
   const finish = () => {
-    router.refresh();
     onDone();
   };
 
@@ -138,7 +136,7 @@ function ItemForm({
         />
       ) : null}
 
-      {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
+      {save.error ? <FieldError>{save.error}</FieldError> : null}
 
       <SheetFooter>
         <Button variant="outline" className="flex-1" onClick={onCancel}>
@@ -173,13 +171,12 @@ function ItemForm({
  * actions live in a sheet, so the list itself stays scannable.
  */
 export function GroceryList({ groceryWeekId, items }: { groceryWeekId: string; items: GroceryItemRow[] }) {
-  const router = useRouter();
   const [selected, setSelected] = useState<GroceryItemRow | null>(null);
   const [mode, setMode] = useState<'detail' | 'edit'>('detail');
   const [adding, setAdding] = useState(false);
 
-  const purchased = useAction(togglePurchased, { successToast: false, onSuccess: () => router.refresh() });
-  const have = useAction(toggleHaveAlready, { successToast: false, onSuccess: () => router.refresh() });
+  const purchased = useAction(togglePurchased, { successToast: false });
+  const have = useAction(toggleHaveAlready, { successToast: false });
 
   const grouped = useMemo(() => {
     const map = new Map<FoodCategoryKey, GroceryItemRow[]>();

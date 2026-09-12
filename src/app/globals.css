@@ -31,7 +31,16 @@
   --accent: oklch(0.95 0.02 260);
   --accent-foreground: oklch(0.28 0.03 260);
 
-  --destructive: oklch(0.58 0.21 27);
+  /*
+   * Darkened from L 0.58, which sat just on the AA boundary against white and
+   * fell under it against the card and muted surfaces. It is used as
+   * normal-size text for every inline error and for the delete label, so it has
+   * to clear 4.5:1 with room to spare rather than exactly: at L 0.55 it reads
+   * 5.4:1 on white and 5.3:1 on --background, and still carries white text at
+   * the same ratio when used as a fill. The dark palette already passes and is
+   * left alone.
+   */
+  --destructive: oklch(0.55 0.21 27);
   --destructive-foreground: oklch(0.99 0.005 260);
 
   /*
@@ -233,4 +242,53 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/*
+ * Sheet and dialog motion.
+ *
+ * The components carried `animate-in` / `slide-in-from-bottom` classes, which
+ * come from a Tailwind animation plugin this project has never depended on, so
+ * nothing moved: every sheet appeared instantly, and the code said otherwise.
+ * Written out here instead of adding the plugin, because four keyframes is less
+ * to maintain than a dependency.
+ *
+ * Radix keeps an element mounted while an animation on its closed state is
+ * running, so the exit is real rather than an instant unmount. The
+ * prefers-reduced-motion block above shortens all of it to nothing.
+ */
+@keyframes sheet-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes sheet-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes sheet-panel-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes sheet-panel-out {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+
+.sheet-overlay[data-state='open'] {
+  animation: sheet-overlay-in 180ms ease-out;
+}
+
+.sheet-overlay[data-state='closed'] {
+  animation: sheet-overlay-out 150ms ease-in;
+}
+
+.sheet-panel[data-state='open'] {
+  animation: sheet-panel-in 220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.sheet-panel[data-state='closed'] {
+  animation: sheet-panel-out 180ms cubic-bezier(0.32, 0.72, 0, 1);
 }

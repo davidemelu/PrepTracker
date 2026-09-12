@@ -3,8 +3,9 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
+import { UserFacingError } from '@/lib/errors';
 import { requireUserId } from '@/lib/auth/guards';
-import { toDbDate } from '@/lib/domain/dates';
+import { toDbDate, todayKey } from '@/lib/domain/dates';
 import { currentTimeString, formatTime12h } from '@/lib/domain/time';
 import { macrosForQuantity } from '@/lib/domain/nutrition';
 import { ensureDailyPlan } from '@/lib/server/day-service';
@@ -38,7 +39,7 @@ async function loadOwnedMeal(userId: string, dailyMealId: string) {
     where: { id: dailyMealId, dailyPlan: { userId } },
     include: { dailyPlan: { select: { date: true } } },
   });
-  if (!meal) throw new Error('That meal could not be found.');
+  if (!meal) throw new UserFacingError('That meal could not be found.');
   return meal;
 }
 
@@ -359,31 +360,25 @@ export async function updateDayNotes(input: { date: string; notes?: string }): P
 const dayTypeSchema = z.object({
   date: dayKey,
   dayTypeId: cuid,
-  /**
-   * Meals already eaten or skipped keep the portions they were logged with.
-   * The default, because a switch at 4 pm should never rewrite breakfast.
-   * Pass false to re-portion every meal, including the logged ones.
-   */
-  keepLoggedMeals: z.boolean().optional(),
 });
 
-/** Override the day type for one date, rebuilding the day from the plan. */
+/**
+ * Override the day type for one date, re-portioning the meals still to come.
+ *
+ * Meals already eaten or skipped are never rewritten, so a switch at 4 pm
+ * cannot change what breakfast was.
+ */
 export async function setDayType(input: {
   date: string;
   dayTypeId: string;
-  keepLoggedMeals?: boolean;
 }): Promise<ActionResult<undefined>> {
-  return runAction(dayTypeSchema, input, async ({ date, dayTypeId, keepLoggedMeals }) => {
+  return runAction(dayTypeSchema, input, async ({ date, dayTypeId }) => {
     const userId = await requireUserId();
 
     const dayType = await prisma.dayType.findFirst({ where: { id: dayTypeId, userId } });
     if (!dayType) return fail('That day type could not be found.');
 
-    await ensureDailyPlan(userId, date, {
-      dayTypeId,
-      regenerate: true,
-      keepLoggedMeals: keepLoggedMeals ?? true,
-    });
+    await ensureDailyPlan(userId, date, { dayTypeId, regenerate: true });
     revalidateDay(date);
     return ok(undefined);
   });
@@ -394,13 +389,28 @@ const regenerateSchema = z.object({ date: dayKey });
 /**
  * Rebuild a day from the current plan. Explicit and opt-in: a plan edit never
  * rewrites a day on its own.
+ *
+ * Only today and future days can be rebuilt. A past day is a record of what
+ * happened, and re-timing the meals you did not get to would quietly rewrite
+ * it; there is no reason to want that which undoing the meal does not serve
+ * better.
  */
 export async function regenerateDay(input: { date: string }): Promise<ActionResult<undefined>> {
   return runAction(regenerateSchema, input, async ({ date }) => {
     const userId = await requireUserId();
+
+    if (date < todayKey()) {
+      return fail(
+        'Past days cannot be rebuilt — they record what actually happened. To change one, edit the meal itself.',
+      );
+    }
+
     await ensureDailyPlan(userId, date, { regenerate: true });
     revalidateDay(date);
-    return ok(undefined, 'Day rebuilt from the current plan. Completions were kept.');
+    return ok(
+      undefined,
+      'Meals still to come were rebuilt from the current plan. Anything already eaten or skipped was left as it was.',
+    );
   });
 }
 

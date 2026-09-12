@@ -153,3 +153,85 @@ recorded while offline needs an engineering design first: idempotency keys on ev
 conflict rules (a meal marked eaten offline, then edited online), and a background sync
 trigger. That belongs to the engineering audit rather than a UI slice, so it is left out on
 purpose rather than half-built.
+
+---
+
+## Engineering remediation (2026-09-12)
+
+Work against [ENGINEERING_AUDIT.md](ENGINEERING_AUDIT.md), following the phases in
+[REMEDIATION_PLAN.md](REMEDIATION_PLAN.md). The finding each change closes is named so the
+audit reads as a checklist rather than a wishlist. Phase 0 was already done by hand: the
+repository was pushed and the redesign merged through pull request #1.
+
+### Data integrity (Phase 1)
+
+| Change | Closes |
+| --- | --- |
+| Rebuilding a day reconciles row by row instead of deleting and re-inserting. A pending meal is re-timed and re-portioned; one eaten or skipped keeps its items, times and name; one that has fallen out of the plan goes only when it is pending and nothing was ever recorded against it. `keepLoggedMeals` is gone rather than defaulted — there is no longer a path that rewrites a logged meal. `regenerateDay` refuses past dates, and the button that calls it no longer appears on them. | H1, H2 |
+| `MealCompletion` and `SupplementCompletion` become `onDelete: Restrict`, so the database refuses to lose the audit trail even if application code asks. | H2 |
+| `updateWaterTarget` resolves today on the server rather than taking the date from the client, which could rewrite any past day's target. | H3 |
+| Grocery lines carry `rawForCookedQty` — the raw weight for the cooked requirement alone. Prep used `rawQty`, the shopping total, so a food planned both cooked and raw told the cook to start with more than the batch needed. | F1 |
+| `macrosForQuantity` returns nulls for a non-finite quantity instead of zeroes, and materialisation refuses to snapshot one. | F2 |
+| "Moved to the fridge" and the yield history stamp the local day, not the UTC one, which after four in the afternoon here is tomorrow. | F3 |
+
+### Security (Phase 1)
+
+| Change | Closes |
+| --- | --- |
+| A backup is validated column by column against the generated data model before anything is written: unknown columns rejected, scalars type-checked, every `userId` rewritten to the account doing the restore, and every other foreign key required to resolve inside the same file. Restore takes an advisory lock and deletes in reverse dependency order. | SEC-1 |
+| `reorderIngredients` checks the ids belong to the meal; `createPrepSession` and `addStoragePortion` verify the references they were handed. | SEC-2, SEC-3 |
+| Tokens carry the account's `sessionVersion`; a password change bumps it and re-issues the current cookie, so every other session ends. | SEC-4 |
+| scrypt parameters are parsed from the stored hash and actually passed to `scrypt`; new hashes use the OWASP minimum and old ones are upgraded on sign-in. | SEC-5 |
+| Per-username and per-address login throttling, checked before the account lookup so a refusal cannot distinguish a real username. | SEC-6 |
+| The `next` redirect guard resolves and compares origins rather than testing for a leading slash. | SEC-7 |
+| Startup refuses the published placeholder secrets and low-entropy values. | SEC-8 |
+| Only `UserFacingError` messages reach the browser; the log line carries name, code and stack, never the error object or its query arguments. | SEC-9, E1, E2, L1 |
+| CSV export neutralises cells a spreadsheet would read as a formula. | SEC-12 |
+
+### Database (Phase 1)
+
+Twenty-two foreign keys gained the index Postgres does not create for them, the redundant
+`(userId, date)` index on `daily_plans` is gone, and `MealIngredient.food` is `Restrict`, so
+deleting a food the plan uses is an explicit step that names the meals first. Migration:
+`20260912071220_integrity_constraints_and_fk_indexes`. `MealPlan.archivedAt` stays despite
+being unused: dropping a column would make every backup taken before today fail validation.
+
+### Architecture (Phase 2)
+
+- `useAction` catches a request that never arrives and reports it, rather than letting it
+  reach an error boundary. Four route boundaries and two not-found pages back that up, each
+  keeping a way out. Closes UI-1, UI-2.
+- Thirty-five `router.refresh()` calls are gone: the action's own `revalidatePath` already
+  returns the re-rendered page in the same round trip. Closes the P1 half of 2.2.
+- Cooked-to-raw, live yield, water progress and shopping progress move out of components into
+  the domain, so the number shown while weighing and the number stored agree. Closes 2.3.
+- One definition each of "overdue", the yield average, and which days can be scored;
+  supplements are netted against inventory. Closes F5, F8, F9, F10, F11.
+- Dead code removed, `middleware.ts` renamed to `proxy.ts`, and the sheets animate for the
+  first time — they carried classes from a plugin the project never depended on.
+
+### Mobile and PWA (Phase 4)
+
+The service worker stamps cached pages with the time they were stored and tells the page when
+it served one, so "Server unreachable · showing Today as it was at 2:02 pm" replaces a stale
+page that looked current. A new worker waits and offers a reload instead of taking over a tab
+running the previous build. Cache names carry the build id. RSC payloads are never cached.
+Closes UI-3 to UI-6.
+
+Layout and accessibility: date-scoped components keyed by date, the Shopping counter readable
+at 320 px, sheets clear of the home indicator and the keyboard, nine more targets at 44 px,
+the radiogroups keyboard-operable, the progress strip no longer hiding its own numbers, light
+`--destructive` at 5.4:1, charts saying in words what they said in colour, and every inline
+error announced. Closes UI-7 to UI-12, A11Y-1 to A11Y-7.
+
+### Verification
+
+`eslint`, `tsc --noEmit`, `prisma validate` and `next build` are clean. 278 unit and 144
+integration tests pass, up from 364 combined, with new coverage for every fix above. Four
+end-to-end journeys pass against a production build at phone width, including two new ones:
+a save that cannot reach the server, and the Shopping counter at 320 px.
+
+Three corrections to the existing end-to-end journey were needed and are worth recording. It
+asserted meal names were level-3 headings, which they no longer are; it opened the progress
+detail by an aria-label that is now a real button; and it assumed today was a training day,
+so it failed every weekend against the seeded Monday-to-Friday pattern.

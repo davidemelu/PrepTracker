@@ -241,14 +241,15 @@ prompted to change the password.
 
 ## Database
 
-32 tables in four families:
+35 tables in four families:
 
 - **Definition** (mutable) — `MealPlan`, `Meal`, `MealDayTypeSetting`, `MealIngredient`,
   `MealIngredientQuantity`, `Food`, `FoodOptionGroup`, `FoodOptionGroupMember`,
-  `PlanWeekPreference`, `DayType`, `ScheduleDay`, `Supplement`, `SupplementSchedule`,
-  `Settings`, `AppSetting`
+  `PlanWeekPreference`, `DayType`, `ScheduleDay`, `ScheduleDayFocus`, `WorkoutFocus`,
+  `Supplement`, `SupplementSchedule`, `Settings`, `AppSetting`
 - **Journal** (snapshots) — `DailyPlan`, `DailyMeal`, `DailyMealItem`, `MealCompletion`,
-  `DailySupplement`, `SupplementCompletion`, `WaterEntry`, `DailyCheckIn`
+  `DailySupplement`, `SupplementCompletion`, `DailyWorkoutFocus`, `WaterEntry`,
+  `DailyCheckIn`
 - **Operations** — `GroceryWeek`, `GroceryItem`, `InventoryItem`, `PrepSession`,
   `PrepTask`, `PrepBatch`, `StoragePortion`, `CookingYield`
 - **Identity** — `User`
@@ -272,8 +273,9 @@ npm run db:migrate           # dev: create + apply
 npm run db:deploy            # production: apply only
 ```
 
-Migrations live in `prisma/migrations/` and are applied automatically on container
-start.
+Migrations live in `prisma/migrations/`. In Docker they are applied by a one-shot
+`migrate` service that runs to completion before the app starts — see
+[Docker deployment](#docker-deployment).
 
 ---
 
@@ -299,6 +301,14 @@ Docker Compose also uses:
 | `ADMIN_PASSWORD` | *(empty)* | Empty means `preptracker`, and you are prompted to change it |
 | `TZ` | `UTC` | Your timezone, so "today" flips at your midnight |
 | `COOKIE_SECURE` | `false` | Set `true` only when served over HTTPS |
+| `PREPTRACKER_TAG` | `latest` | Which image tag Compose runs |
+
+The backup service takes `BACKUP_TIME`, `BACKUP_WEEKLY_DAY`, `BACKUP_RETENTION_DAYS`,
+`BACKUP_SECONDARY_DIR`, `BACKUP_RSYNC_TARGET`, `BACKUP_AGE_RECIPIENT` and
+`BACKUP_ALLOW_UNENCRYPTED`; migrations take `BACKUP_MAX_AGE_HOURS` and `SKIP_BACKUP_GATE`.
+All have defaults and all are explained in `.env.example` and
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#backups). The only one worth setting on day one is a
+destination for the off-host copy.
 
 ---
 
@@ -308,18 +318,40 @@ Docker Compose also uses:
 cp .env.example .env
 # Set AUTH_SECRET, POSTGRES_PASSWORD and TZ
 
+mkdir -p backups && sudo chown -R 1001:1001 backups
+
 docker compose up -d --build
 docker compose logs -f app
 ```
 
-On first start the container waits for Postgres, applies migrations, and seeds **only
-if the database is empty**. Restarting never re-seeds and never overwrites data.
+Four services, each with one job:
+
+| Service | Lifetime | What it does |
+| --- | --- | --- |
+| `db` | always | Postgres 16, never published to the host |
+| `migrate` | one shot | applies migrations, seeds an empty database, then exits |
+| `app` | always | the Next.js server, and nothing else |
+| `backup` | always | nightly dump, weekly off-host copy, weekly restore check |
+
+`app` starts only when `migrate` has exited 0, so a failed migration stops the
+deployment instead of leaving the app running against a schema it does not
+understand. The seed runs **only if the database is empty**, so restarting never
+re-seeds and never overwrites data.
+
+The app image is 290 MB and contains the Next.js standalone build and nothing
+else — no Prisma CLI, no `npm`, no source, no `psql`. Schema work happens in the
+`migrate` container instead:
+
+```bash
+docker compose run --rm migrate status   # what is applied, what is pending
+docker compose run --rm migrate seed     # re-run the idempotent seed
+```
 
 It listens on `127.0.0.1:3000` by default — reachable from the Docker host and nowhere
 else. See the next section before changing that.
 
 ```bash
-docker compose ps            # status and health
+docker compose ps            # status and health, including the backup service
 docker compose logs -f app   # follow logs
 docker compose down          # stop (the named volume keeps your data)
 docker compose down -v       # stop AND DELETE the database volume
@@ -328,6 +360,9 @@ docker compose down -v       # stop AND DELETE the database volume
 The two compose files use different project names (`preptracker` and
 `preptracker-dev`), so `docker compose down` on one can never remove the other's
 containers or volumes.
+
+Full detail, including resource limits and the reverse-proxy options, is in
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ---
 
@@ -445,13 +480,45 @@ session every time a file changes.
 - [ ] `COOKIE_SECURE="true"` if you are serving HTTPS
 - [ ] Postgres is never published to the host (it uses `expose`, not `ports`)
 - [ ] No router port-forwarding to the app
-- [ ] Backups are running (below)
+- [ ] `docker compose ps` shows `backup` healthy
+- [ ] A copy of the backups exists somewhere that is not this machine, encrypted
+- [ ] `.env` is in a password manager — without it the data is restorable but the
+      installation is not
+
+What this does and does not defend against, written out honestly, is in
+[SECURITY.md](SECURITY.md).
 
 ---
 
 ## Backup and restore
 
-Three ways, in increasing order of completeness.
+> **A backup is a credential.** Both the JSON export and the Postgres dump contain
+> `users.passwordHash` and every meal, supplement, water and check-in row you have
+> recorded. Store one the way you store the database itself.
+
+### 0. What runs by itself
+
+The `backup` service is part of the deployment — there is no cron entry on the host
+to forget, and nothing to re-create when the server is rebuilt.
+
+- **Nightly** at 03:15 local: `pg_dump | gzip` into `./backups`, keeping 30 days.
+- **Weekly:** restore the newest dump into a scratch database and count rows, so a
+  backup that would not actually restore is found before you need it.
+- **Weekly:** encrypt the newest dump with `age` and copy it off this machine.
+- **On a pending migration:** refuse to migrate a database that has data unless a
+  dump from the last 48 hours exists (`SKIP_BACKUP_GATE=1` overrides).
+
+```bash
+docker compose ps backup             # healthy = a dump within the last 36 hours
+cat backups/.backup-status           # last dump, last verification, last copy
+docker compose run --rm backup now   # take one immediately
+```
+
+The off-host copy needs one piece of setup — a second location and an `age` key —
+and until you do it the service warns on every start that every backup is on the same
+disk as the database. [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) § *Backups* has the
+steps; [docs/DISASTER_RECOVERY.md](docs/DISASTER_RECOVERY.md) is what to do when you
+need them.
 
 ### 1. From the app
 
@@ -474,22 +541,20 @@ had when the backup was taken.
 
 ### 3. A Postgres dump (the belt-and-braces option)
 
+This is what the `backup` service writes every night. By hand:
+
 ```bash
 # Back up
-docker compose exec -T db pg_dump -U preptracker preptracker | gzip > backups/db-$(date +%F).sql.gz
+docker compose run --rm backup now
 
-# Restore
-gunzip -c backups/db-2026-09-11.sql.gz | docker compose exec -T db psql -U preptracker -d preptracker
+# Restore, over the top of the live database
+gunzip -c backups/db-2026-09-11.sql.gz | \
+  docker compose exec -T db psql -v ON_ERROR_STOP=1 -U preptracker -d preptracker
 ```
 
-A nightly cron on the host:
-
-```cron
-15 3 * * * cd /srv/preptracker && docker compose exec -T db pg_dump -U preptracker preptracker | gzip > backups/db-$(date +\%F).sql.gz
-```
-
-The `./backups` directory is mounted into both containers, so all three methods write to
-the same place.
+`./backups` is mounted read-write into the `backup` service and read-only into `db`.
+It is deliberately **not** mounted into `app`: the process reachable from the network
+has no reason to be able to read every historical dump.
 
 ---
 
@@ -498,22 +563,32 @@ the same place.
 ```bash
 cd /srv/preptracker
 
-# 1. Back up first, always.
-docker compose exec -T db pg_dump -U preptracker preptracker | gzip > backups/pre-upgrade-$(date +%F).sql.gz
+# 1. Back up first. The migrate service will refuse to run a pending migration
+#    without a recent dump, but take one deliberately anyway.
+docker compose run --rm backup now
 
-# 2. Get the new version
-git pull
+# 2. Get the new version. Prefer a tag over the tip of main: it is what CI built
+#    and scanned, and it is what a rollback goes back to.
+git fetch --tags
+git checkout v0.2.0
 
-# 3. Rebuild and restart. Migrations run automatically on start.
+# 3. Rebuild and restart. The migrate service applies migrations and exits before
+#    the app starts.
 docker compose up -d --build
 
 # 4. Check it came up
+docker compose logs migrate
 docker compose logs -f app
 curl -s http://127.0.0.1:3000/api/health
 ```
 
-To roll back: `git checkout <previous-commit>`, rebuild, and restore the dump if a
-migration has already changed the schema.
+If `migrate` exits non-zero the app does not start and the previous container keeps
+running. Read `docker compose logs migrate`; the two usual causes are the backup gate
+and a migration that genuinely failed.
+
+To roll back: `git checkout <previous tag>`, rebuild, and restore the pre-upgrade dump
+if a migration has already changed the schema. Step by step in
+[docs/DISASTER_RECOVERY.md](docs/DISASTER_RECOVERY.md).
 
 ---
 
@@ -550,8 +625,8 @@ npm run test:e2e
 
 ```
 prisma/
-  schema.prisma            32 models, heavily commented
-  migrations/              applied automatically on container start
+  schema.prisma            35 models, heavily commented
+  migrations/              applied by the one-shot `migrate` compose service
   seed.ts                  writes the starting plan as rows — never read at runtime
 src/
   app/
@@ -571,7 +646,7 @@ src/
     server/                services needing domain + database
     validation/            zod schemas
     auth/                  session, scrypt passwords, guards
-  middleware.ts            redirects signed-out requests to /login
+  proxy.ts                 redirects signed-out requests to /login
 docker/entrypoint.sh       wait for db → migrate → seed if empty → start
 scripts/
   backup.ts restore.ts     CLI backup and restore
@@ -622,4 +697,5 @@ There is no dosage guidance, interaction checking or recommendation in the codeb
 
 ## Licence
 
-Personal project. Use it however you like.
+MIT — see [LICENSE](LICENSE). A personal project, published in case it is useful to
+someone else; use it however you like, with no warranty of any kind.

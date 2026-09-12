@@ -1,0 +1,25 @@
+# Editor defaults, so a file does not change shape depending on who opens it.
+# Matches the repository as it already is: two-space indentation, LF, UTF-8.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+max_line_length = 100
+
+[*.md]
+# Two trailing spaces are a line break in Markdown.
+trim_trailing_whitespace = false
+
+[*.{sh,bash}]
+# These are copied into Alpine images and run by busybox sh. A CRLF here makes
+# the shebang unreadable and the container fails with "no such file".
+end_of_line = lf
+
+[Makefile]
+indent_style = tab

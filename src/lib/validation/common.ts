@@ -82,6 +82,12 @@ export const optionalDayKey = z.preprocess(
 
 export const cuid = z.string().trim().min(1, 'Missing identifier.');
 
+/**
+ * The whole input of an action that only needs to know which record to act on:
+ * delete, activate, toggle, duplicate. Eight files declared this separately.
+ */
+export const idSchema = z.object({ id: cuid });
+
 export const optionalCuid = z.preprocess(
   (v) => (v === '' || v === null || v === 'none' ? undefined : v),
   cuid.optional(),

@@ -25,9 +25,27 @@ const devOrigins = [
   '172.*.*.*',
 ];
 
+/**
+ * Identifies this build to the client, which passes it to the service worker as
+ * /sw.js?v=<build id> so that every cache name changes when a new version is
+ * deployed.
+ *
+ * It has to be resolved here rather than stamped into public/sw.js, because
+ * `output: 'standalone'` copies public/ verbatim and there is no build step in
+ * this project that rewrites a file on the way through. Set
+ * NEXT_PUBLIC_BUILD_ID at build time (the image build should pass the git SHA)
+ * for a value that is traceable back to a commit; the timestamp below is a
+ * correct but opaque fallback for a local build, and only has to be different
+ * from the previous one.
+ */
+const BUILD_ID = process.env.NEXT_PUBLIC_BUILD_ID?.trim() || `t${Date.now().toString(36)}`;
+
 const nextConfig: NextConfig = {
   // Produces .next/standalone so the Docker image can ship without node_modules.
   output: 'standalone',
+  // Inlined into the client bundle at build time, so the value the browser sees
+  // is fixed when the assets it names were produced.
+  env: { NEXT_PUBLIC_BUILD_ID: BUILD_ID },
   allowedDevOrigins: devOrigins,
   reactStrictMode: true,
   poweredByHeader: false,

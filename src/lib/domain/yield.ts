@@ -124,6 +124,19 @@ export function planPortions(
   };
 }
 
+/**
+ * Containers needed to hold a cooked amount.
+ *
+ * Ceils, unlike `planPortions`: this answers "how many portions does the plan
+ * ask for", where a part portion still has to go somewhere, rather than "how
+ * many did this batch make". The rounding before the ceiling stops 2450/175
+ * arriving as 14.000000000000002 and asking for fifteen containers.
+ */
+export function portionsRequired(cookedQty: number, portionSizeG: number): number {
+  if (!Number.isFinite(cookedQty) || !Number.isFinite(portionSizeG) || portionSizeG <= 0) return 0;
+  return Math.ceil(round(Math.max(0, cookedQty) / portionSizeG, 4));
+}
+
 export interface YieldObservation {
   yieldPct: number;
   recordedAt: Date | string;
@@ -132,67 +145,35 @@ export interface YieldObservation {
 
 /**
  * Effective yield for a food: the mean of the most recent measured batches,
- * falling back to the seeded default until a batch has been recorded.
+ * falling back to what you set by hand, and then to the seeded default.
  *
  * A rolling mean rather than "last value wins" so a single odd batch (a lid
  * left off, a very thick steak) does not swing next week's shopping list.
+ *
+ * Measurements outrank manual values outright rather than being averaged with
+ * them. A number you typed is an estimate; a number off the scale is evidence,
+ * and mixing the two meant one measured batch after a hand-set value landed
+ * halfway between the two — so the food said 76% when the only thing ever
+ * weighed came out at 70%.
  */
 export function effectiveYield(
   observations: readonly YieldObservation[],
   fallbackPct?: number | null,
   sampleSize = 5,
 ): number | null {
-  const measured = observations
-    .filter((o) => o.source !== 'DEFAULT' && Number.isFinite(o.yieldPct) && o.yieldPct > 0)
-    .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())
-    .slice(0, Math.max(1, sampleSize));
+  const usable = observations
+    .filter((o) => Number.isFinite(o.yieldPct) && o.yieldPct > 0)
+    .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
 
-  if (measured.length === 0) {
-    return fallbackPct != null && fallbackPct > 0 ? round(fallbackPct, 2) : null;
+  const measured = usable.filter((o) => o.source === 'MEASURED').slice(0, Math.max(1, sampleSize));
+  if (measured.length > 0) {
+    const total = measured.reduce((sum, o) => sum + o.yieldPct, 0);
+    return round(total / measured.length, 2);
   }
 
-  const total = measured.reduce((sum, o) => sum + o.yieldPct, 0);
-  return round(total / measured.length, 2);
-}
+  // Nothing weighed yet: the most recent deliberate value, then the seed.
+  const manual = usable.find((o) => o.source === 'MANUAL');
+  if (manual) return round(manual.yieldPct, 2);
 
-export interface MeatRequirement {
-  foodId: string | null;
-  foodName: string;
-  /** Cooked grams the plan needs over the period. */
-  cookedRequiredG: number;
-  /** Raw grams to buy, null when no yield is known for the food. */
-  rawRequiredG: number | null;
-  yieldPct: number | null;
-  portionSizeG: number;
-  portionsRequired: number;
-  /** True when no yield is recorded, so the raw amount could not be derived. */
-  missingYield: boolean;
-}
-
-/**
- * Turn a cooked requirement into a shopping requirement.
- *
- * Worked example from the default plan: meals 2 and 4 each need 175 g cooked
- * chicken, twice a day for seven days = 2450 g cooked. At a 75% yield that is
- * 2450 / 0.75 = 3266.7 g raw.
- */
-export function buildMeatRequirement(input: {
-  foodId: string | null;
-  foodName: string;
-  cookedRequiredG: number;
-  yieldPct: number | null;
-  portionSizeG: number;
-}): MeatRequirement {
-  const { foodId, foodName, cookedRequiredG, yieldPct, portionSizeG } = input;
-  const usable = yieldPct != null && yieldPct > 0;
-  return {
-    foodId,
-    foodName,
-    cookedRequiredG: round(cookedRequiredG, 1),
-    rawRequiredG: usable ? round(cookedToRaw(cookedRequiredG, yieldPct), 1) : null,
-    yieldPct: usable ? round(yieldPct, 2) : null,
-    portionSizeG,
-    portionsRequired: portionSizeG > 0 ? Math.ceil(round(cookedRequiredG / portionSizeG, 4)) : 0,
-    missingYield: !usable,
-  };
+  return fallbackPct != null && fallbackPct > 0 ? round(fallbackPct, 2) : null;
 }

@@ -1,11 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Plus, Replace } from 'lucide-react';
 import { deleteOptionGroup, saveOptionGroup, setOptionPreference } from '@/lib/actions/foods';
 import { useAction } from '@/lib/hooks/use-action';
 import { Badge } from '@/components/ui/badge';
+import { FieldError } from '@/components/ui/field-error';
 import { Button } from '@/components/ui/button';
 import { DeleteButton } from '@/components/ui/delete-button';
 import { Card } from '@/components/ui/card';
@@ -40,14 +40,12 @@ function GroupForm({
   onDone: () => void;
   onCancel: () => void;
 }) {
-  const router = useRouter();
   const [name, setName] = useState(initial?.name ?? '');
   const [notes, setNotes] = useState(initial?.notes ?? '');
   const [foodIds, setFoodIds] = useState<string[]>(initial?.members.map((m) => m.id) ?? []);
   const [preferredFoodId, setPreferredFoodId] = useState(initial?.preferredFoodId ?? '');
 
   const finish = () => {
-    router.refresh();
     onDone();
   };
 
@@ -69,14 +67,14 @@ function GroupForm({
           aria-invalid={Boolean(save.fieldErrors.name)}
         />
         {save.fieldErrors.name ? (
-          <p className="text-sm text-destructive">{save.fieldErrors.name[0]}</p>
+          <FieldError>{save.fieldErrors.name[0]}</FieldError>
         ) : null}
       </div>
 
       <fieldset className="space-y-2">
         <legend className="mb-1 text-sm font-medium">Foods to choose between</legend>
         {save.fieldErrors.foodIds ? (
-          <p className="text-sm text-destructive">{save.fieldErrors.foodIds[0]}</p>
+          <FieldError>{save.fieldErrors.foodIds[0]}</FieldError>
         ) : null}
         <div className="max-h-72 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
           {foods.map((food) => (
@@ -107,7 +105,7 @@ function GroupForm({
                   type="button"
                   onClick={() => setPreferredFoodId(id)}
                   className={cn(
-                    'h-10 rounded-lg border px-3 text-sm transition-colors',
+                    'min-h-11 rounded-lg border px-3 text-sm transition-colors',
                     preferredFoodId === id ? 'border-primary bg-primary/10 text-primary' : 'border-border',
                   )}
                 >
@@ -140,7 +138,7 @@ function GroupForm({
         />
       ) : null}
 
-      {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
+      {save.error ? <FieldError>{save.error}</FieldError> : null}
 
       <SheetFooter>
         <Button variant="outline" className="flex-1" onClick={onCancel}>
@@ -181,11 +179,10 @@ export function GroupsManager({
   weekStart: string;
   weekPreferences: Record<string, string>;
 }) {
-  const router = useRouter();
   const [editing, setEditing] = useState<GroupRow | null>(null);
   const [adding, setAdding] = useState(false);
 
-  const setPreference = useAction(setOptionPreference, { onSuccess: () => router.refresh() });
+  const setPreference = useAction(setOptionPreference);
 
   return (
     <div className="space-y-4">

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 import { toast } from 'sonner';
 import { deleteFood, saveFood } from '@/lib/actions/foods';
@@ -9,6 +8,7 @@ import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/domain/grocery';
 import { UNIT_DEFINITIONS } from '@/lib/domain/units';
 import { useAction } from '@/lib/hooks/use-action';
 import { Button } from '@/components/ui/button';
+import { FieldError } from '@/components/ui/field-error';
 import { DeleteButton } from '@/components/ui/delete-button';
 import { Input, NumberInput, Textarea } from '@/components/ui/input';
 import { Label, Switch, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/primitives';
@@ -86,11 +86,9 @@ export function FoodForm({
   onDone?: () => void;
   onCancel?: () => void;
 }) {
-  const router = useRouter();
   const [values, setValues] = useState<FoodFormValues>({ ...EMPTY_FOOD, ...initial });
 
   const finish = () => {
-    router.refresh();
     onDone?.();
   };
 
@@ -103,7 +101,17 @@ export function FoodForm({
     },
   });
 
-  const remove = useAction(deleteFood, { onSuccess: finish });
+  const remove = useAction(deleteFood, {
+    onSuccess: finish,
+    // The server knows which meals lose a line; it says so before anything is
+    // deleted rather than reporting it afterwards.
+    onNeedsConfirmation: (message) => {
+      toast.warning(message, {
+        duration: 10_000,
+        action: { label: 'Delete anyway', onClick: () => remove.run({ id: values.id!, confirm: true }) },
+      });
+    },
+  });
 
   const set = <K extends keyof FoodFormValues>(key: K, value: FoodFormValues[K]) =>
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -131,7 +139,7 @@ export function FoodForm({
               aria-invalid={Boolean(save.fieldErrors.name)}
             />
             {save.fieldErrors.name ? (
-              <p className="text-sm text-destructive">{save.fieldErrors.name[0]}</p>
+              <FieldError>{save.fieldErrors.name[0]}</FieldError>
             ) : null}
           </div>
 
@@ -195,7 +203,7 @@ export function FoodForm({
                   are above 100%.
                 </p>
                 {save.fieldErrors.cookingYieldPct ? (
-                  <p className="text-sm text-destructive">{save.fieldErrors.cookingYieldPct[0]}</p>
+                  <FieldError>{save.fieldErrors.cookingYieldPct[0]}</FieldError>
                 ) : null}
               </div>
             ) : null}
@@ -368,7 +376,7 @@ export function FoodForm({
         />
       ) : null}
 
-      {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
+      {save.error ? <FieldError>{save.error}</FieldError> : null}
 
       <SheetFooter>
         {onCancel ? (

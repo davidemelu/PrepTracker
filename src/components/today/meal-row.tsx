@@ -146,7 +146,13 @@ export function MealRow({ meal, state, minutes, substitutions }: MealRowProps) {
         <StateIcon state={state} />
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
-            <h3 className={cn('text-[17px] font-semibold leading-6', isSkipped && 'text-muted-foreground')}>{meal.name}</h3>
+            {/*
+              A span, not a heading. The whole row is the disclosure button and
+              a heading inside a button is neither valid nor useful: a screen
+              reader reading the button announces the name already, and the
+              list sits under the section's own "Meals" heading.
+            */}
+            <span className={cn('text-[17px] font-semibold leading-6', isSkipped && 'text-muted-foreground')}>{meal.name}</span>
             {state === 'next' ? (
               <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">Next</span>
             ) : null}
@@ -170,7 +176,7 @@ export function MealRow({ meal, state, minutes, substitutions }: MealRowProps) {
               <button
                 type="button"
                 onClick={openTimeSheet}
-                className="flex h-9 items-center gap-1.5 rounded-full bg-success/12 px-3 text-sm font-semibold text-success"
+                className="flex h-11 items-center gap-1.5 rounded-full bg-success/12 px-3 text-sm font-semibold text-success"
               >
                 <Check className="size-3.5" strokeWidth={3} aria-hidden />
                 Eaten {meal.actualTime ? formatTime12h(meal.actualTime) : ''}
@@ -270,7 +276,8 @@ export function MealRow({ meal, state, minutes, substitutions }: MealRowProps) {
                 Now
               </Button>
             </div>
-            {setActual.error ? <p className="text-sm text-destructive">{setActual.error}</p> : null}
+            {/* role="alert" so a failure inside a sheet is spoken, not just drawn. */}
+            {setActual.error ? <p role="alert" className="text-sm text-destructive">{setActual.error}</p> : null}
           </div>
           <SheetFooter>
             <Button variant="outline" className="flex-1" onClick={close}>Cancel</Button>

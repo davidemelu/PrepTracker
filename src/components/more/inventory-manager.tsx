@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Minus, Package, Plus, Search } from 'lucide-react';
 import {
   adjustInventoryQuantity,
@@ -12,6 +11,7 @@ import { formatAmount } from '@/lib/domain/units';
 import { UNIT_DEFINITIONS } from '@/lib/domain/units';
 import { useAction } from '@/lib/hooks/use-action';
 import { Badge } from '@/components/ui/badge';
+import { FieldError } from '@/components/ui/field-error';
 import { Button } from '@/components/ui/button';
 import { DeleteButton } from '@/components/ui/delete-button';
 import { Card } from '@/components/ui/card';
@@ -51,7 +51,6 @@ function ItemForm({
   onDone: () => void;
   onCancel: () => void;
 }) {
-  const router = useRouter();
   const [values, setValues] = useState({
     foodId: initial?.foodId ?? '',
     name: initial?.name ?? '',
@@ -64,7 +63,6 @@ function ItemForm({
   });
 
   const finish = () => {
-    router.refresh();
     onDone();
   };
 
@@ -185,7 +183,7 @@ function ItemForm({
         />
       ) : null}
 
-      {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
+      {save.error ? <FieldError>{save.error}</FieldError> : null}
 
       <SheetFooter>
         <Button variant="outline" className="flex-1" onClick={onCancel}>
@@ -218,7 +216,6 @@ export function InventoryManager({
   items: InventoryRow[];
   foods: Array<{ id: string; name: string; defaultUnit: string }>;
 }) {
-  const router = useRouter();
   const [location, setLocation] = useState<'ALL' | InventoryRow['location']>('ALL');
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<InventoryRow | null>(null);
@@ -226,7 +223,6 @@ export function InventoryManager({
 
   const adjust = useAction(adjustInventoryQuantity, {
     successToast: false,
-    onSuccess: () => router.refresh(),
   });
 
   const filtered = useMemo(() => {

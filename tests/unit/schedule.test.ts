@@ -17,6 +17,7 @@ import {
   relativeMinutes,
   timeToMinutes,
 } from '@/lib/domain/time';
+import { buildReminders } from '@/lib/domain/reminders';
 
 /** The seeded preferences. */
 const prefs: TimingPreferences = {
@@ -483,5 +484,30 @@ describe('a workout that moves', () => {
     const a = generateMealTimes(meals, { ...rules, hasWorkout: false, workoutTime: '09:00' });
     const b = generateMealTimes(meals, { ...rules, hasWorkout: false, workoutTime: '21:00' });
     expect(a.meals.map((m) => m.time)).toEqual(b.meals.map((m) => m.time));
+  });
+});
+
+describe('the overdue rule is one rule', () => {
+  it('agrees between the meal list and the reminders seven hours late', () => {
+    // The reminders used to look back only six hours, so a meal this late was
+    // styled overdue on Today and missing from the list meant to summarise it.
+    const meals = [{ id: 'm1', name: 'Meal 1', scheduledTime: '08:00', status: 'PENDING' }];
+    const overdue = findOverdueMeals(meals, '15:30');
+    expect(overdue).toHaveLength(1);
+
+    const reminders = buildReminders({
+      today: '2026-09-14',
+      nowTime: '15:30',
+      meals: meals.map((m) => ({ ...m, status: 'PENDING' as const })),
+      supplements: [],
+      water: { totalMl: 0, targetMl: 4000 },
+      storage: [],
+    });
+    expect(reminders.some((r) => r.kind === 'MEAL_OVERDUE')).toBe(true);
+  });
+
+  it('treats a meal inside the grace period as not yet late on either surface', () => {
+    const meals = [{ id: 'm1', name: 'Meal 1', scheduledTime: '08:00', status: 'PENDING' }];
+    expect(findOverdueMeals(meals, '08:10')).toHaveLength(0);
   });
 });

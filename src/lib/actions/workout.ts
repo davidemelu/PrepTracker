@@ -4,7 +4,6 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { requireUserId } from '@/lib/auth/guards';
-import { toDbDate } from '@/lib/domain/dates';
 import {
   resolveFocuses,
   validateFocusSelection,
@@ -17,6 +16,7 @@ import {
   checkbox,
   cuid,
   dayKey,
+  idSchema,
   nonEmptyName,
   numberish,
   optionalCuid,
@@ -298,7 +298,6 @@ export async function saveWorkoutFocus(input: unknown): Promise<ActionResult<{ i
   });
 }
 
-const idSchema = z.object({ id: cuid });
 
 export async function deleteWorkoutFocus(input: { id: string }): Promise<ActionResult<undefined>> {
   return runAction(idSchema, input, async ({ id }) => {
@@ -381,12 +380,3 @@ export async function setScheduledWorkout(input: unknown): Promise<ActionResult<
   });
 }
 
-/** Day types, used by the picker to know whether to offer workout inputs. */
-export async function getDayTypeIsTraining(date: string): Promise<boolean> {
-  const userId = await requireUserId();
-  const plan = await prisma.dailyPlan.findUnique({
-    where: { userId_date: { userId, date: toDbDate(date) } },
-    select: { dayTypeIsTraining: true },
-  });
-  return plan?.dayTypeIsTraining ?? false;
-}

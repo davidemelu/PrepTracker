@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { PackageCheck, Snowflake, Sprout } from 'lucide-react';
 import { setBulkClass } from '@/lib/actions/foods';
 import { CATEGORY_LABELS, type FoodCategoryKey } from '@/lib/domain/grocery';
@@ -54,14 +53,12 @@ const CLASSES = [
  * anything here can be re-sorted in two taps when your storage changes.
  */
 export function BulkManager({ foods }: { foods: BulkRow[] }) {
-  const router = useRouter();
   const [editing, setEditing] = useState<BulkRow | null>(null);
 
   const setClass = useAction(setBulkClass, {
     successToast: false,
     onSuccess: () => {
       setEditing(null);
-      router.refresh();
     },
   });
 

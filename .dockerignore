@@ -1,3 +1,6 @@
+# Keep the build context to what the image actually needs. Everything listed
+# here is either regenerated inside the image, irrelevant to it, or a secret.
+
 node_modules
 .next
 .git
@@ -7,11 +10,20 @@ node_modules
 /coverage
 /playwright-report
 /test-results
+/dist
 .env
 .env.local
 .env.test
 *.log
+*.tsbuildinfo
 docs
 tests
-README.md
+/scripts
+*.md
+.editorconfig
+.nvmrc
+LICENSE
+docker-compose.yml
 docker-compose.dev.yml
+playwright.config.ts
+vitest.config.mts

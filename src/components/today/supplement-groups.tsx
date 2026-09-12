@@ -3,6 +3,7 @@
 import { useOptimistic, useState, useTransition } from 'react';
 import { Check, ChevronDown, ChevronRight, Pill } from 'lucide-react';
 import { toast } from 'sonner';
+import { callAction } from '@/lib/hooks/use-action';
 import { completeSupplement, completeSupplements, undoSupplement } from '@/lib/actions/supplements';
 import { formatDose } from '@/lib/domain/materialise';
 import { formatTime12h } from '@/lib/domain/time';
@@ -54,12 +55,15 @@ export function SupplementGroups({ supplements }: { supplements: DaySupplementVi
   const setStatus = (ids: string[], status: 'COMPLETED' | 'PENDING') => {
     startTransition(async () => {
       applyOptimistic({ ids, status });
-      const result =
+      const result = await callAction(() =>
         status === 'COMPLETED'
           ? ids.length === 1
-            ? await completeSupplement({ dailySupplementId: ids[0]! })
-            : await completeSupplements({ dailySupplementIds: ids })
-          : await undoSupplement({ dailySupplementId: ids[0]! });
+            ? completeSupplement({ dailySupplementId: ids[0]! })
+            : completeSupplements({ dailySupplementIds: ids })
+          : undoSupplement({ dailySupplementId: ids[0]! }),
+      );
+      // The optimistic tick is discarded when the transition ends, so the row
+      // returns to what the server last said and the toast explains why.
       if (!result.ok) toast.error(result.error);
     });
   };

@@ -30,16 +30,28 @@ export interface WaterProgress {
 
 export function waterProgress(entries: readonly WaterEntryLike[], targetMl: number): WaterProgress {
   const totalMl = entries.reduce((sum, e) => sum + (Number.isFinite(e.amountMl) ? e.amountMl : 0), 0);
+  return { ...progressFromTotal(totalMl, targetMl), entryCount: entries.length };
+}
+
+/**
+ * The same arithmetic for a total that is not a list of rows.
+ *
+ * The water card holds an optimistic total that moves before the server answers,
+ * and it has to describe that total the same way the server will when the answer
+ * arrives, or the number changes under the user's thumb for no reason.
+ */
+export function progressFromTotal(totalMl: number, targetMl: number): WaterProgress {
+  const safeTotal = Number.isFinite(totalMl) ? Math.max(0, totalMl) : 0;
   const safeTarget = targetMl > 0 ? targetMl : 0;
-  const percent = safeTarget > 0 ? round((totalMl / safeTarget) * 100, 1) : 0;
+  const percent = safeTarget > 0 ? round((safeTotal / safeTarget) * 100, 1) : 0;
   return {
-    totalMl,
+    totalMl: safeTotal,
     targetMl: safeTarget,
-    remainingMl: Math.max(0, safeTarget - totalMl),
+    remainingMl: Math.max(0, safeTarget - safeTotal),
     percent,
     percentCapped: Math.min(100, Math.max(0, percent)),
-    goalReached: safeTarget > 0 && totalMl >= safeTarget,
-    entryCount: entries.length,
+    goalReached: safeTarget > 0 && safeTotal >= safeTarget,
+    entryCount: 0,
   };
 }
 

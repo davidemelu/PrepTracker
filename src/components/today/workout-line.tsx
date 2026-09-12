@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { Dumbbell, Loader2, Moon, Plus } from 'lucide-react';
 import { toast } from 'sonner';
+import { callAction } from '@/lib/hooks/use-action';
 import { applyScheduledWorkout, setDayWorkout, setDayWorkoutTime } from '@/lib/actions/workout';
 import { formatTime12h } from '@/lib/domain/time';
 import { formatWorkout, groupFocuses, type DayWorkout, type WorkoutFocusLike } from '@/lib/domain/workout';
@@ -110,24 +111,27 @@ export function WorkoutLine({
   const save = () => {
     startTransition(async () => {
       if (time && time !== (workoutTime ?? defaultWorkoutTime)) {
-        const timed = await setDayWorkoutTime({ date, workoutTime: time });
+        const timed = await callAction(() => setDayWorkoutTime({ date, workoutTime: time }));
         if (!timed.ok) {
           toast.error(timed.error);
           return;
         }
       }
-      const result = await setDayWorkout({ date, focusIds: selected, workoutName: name });
+      const result = await callAction(() =>
+        setDayWorkout({ date, focusIds: selected, workoutName: name }),
+      );
       if (!result.ok) {
         toast.error(result.error);
         return;
       }
+      // The sheet stays open on failure so the selection is not lost.
       setOpen(false);
     });
   };
 
   const useUsual = () => {
     startTransition(async () => {
-      const result = await applyScheduledWorkout({ date });
+      const result = await callAction(() => applyScheduledWorkout({ date }));
       if (!result.ok) toast.error(result.error);
       else setOpen(false);
     });

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Pause, Pill, Play, Plus } from 'lucide-react';
 import {
   deleteSupplement,
@@ -12,6 +11,7 @@ import { formatDose, SUPPLEMENT_TIMING_LABELS, type SupplementTimingKey } from '
 import { DOSAGE_UNITS } from '@/lib/domain/units';
 import { useAction } from '@/lib/hooks/use-action';
 import { Badge } from '@/components/ui/badge';
+import { FieldError } from '@/components/ui/field-error';
 import { Button } from '@/components/ui/button';
 import { DeleteButton } from '@/components/ui/delete-button';
 import { Card } from '@/components/ui/card';
@@ -57,7 +57,6 @@ function SupplementForm({
   onDone: () => void;
   onCancel: () => void;
 }) {
-  const router = useRouter();
   const [values, setValues] = useState({
     name: initial?.name ?? '',
     dosageAmount: initial?.dosageAmount != null ? String(initial.dosageAmount) : '',
@@ -73,7 +72,6 @@ function SupplementForm({
   });
 
   const finish = () => {
-    router.refresh();
     onDone();
   };
 
@@ -94,7 +92,7 @@ function SupplementForm({
           aria-invalid={Boolean(save.fieldErrors.name)}
         />
         {save.fieldErrors.name ? (
-          <p className="text-sm text-destructive">{save.fieldErrors.name[0]}</p>
+          <FieldError>{save.fieldErrors.name[0]}</FieldError>
         ) : null}
       </div>
 
@@ -222,7 +220,7 @@ function SupplementForm({
         />
       ) : null}
 
-      {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
+      {save.error ? <FieldError>{save.error}</FieldError> : null}
 
       <SheetFooter>
         <Button variant="outline" className="flex-1" onClick={onCancel}>
@@ -256,11 +254,10 @@ export function SupplementsManager({
   supplements: SupplementRow[];
   meals: Array<{ id: string; name: string }>;
 }) {
-  const router = useRouter();
   const [editing, setEditing] = useState<SupplementRow | null>(null);
   const [adding, setAdding] = useState(false);
 
-  const toggle = useAction(toggleSupplementActive, { onSuccess: () => router.refresh() });
+  const toggle = useAction(toggleSupplementActive);
 
   return (
     <div className="space-y-4">

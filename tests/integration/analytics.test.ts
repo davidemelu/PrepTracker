@@ -57,21 +57,35 @@ describe('getPeriodStats', () => {
     expect(stats.plannedMeals).toBe(2);
   });
 
-  it('counts today and earlier days normally', async () => {
+  it('leaves an unfinished today out of the score', async () => {
     const today = todayKey();
     const yesterday = addDays(today, -1);
 
     await completeDay(yesterday);
-    // Today is generated but nothing is completed on it.
+    // Today is generated but nothing is completed on it yet. Scoring those
+    // meals as missed would make the week look worse the earlier you looked.
     await dayService.ensureDailyPlan(fixture.userId, today);
 
     const stats = await analytics.getPeriodStats(fixture.userId, addDays(today, -3), today);
 
-    expect(stats.trackedDays).toBe(2);
-    // Yesterday's meals were eaten, today's were not.
+    expect(stats.trackedDays).toBe(1);
     expect(stats.completedMeals).toBe(2);
+    expect(stats.plannedMeals).toBe(2);
+    expect(stats.mealPercent).toBe(100);
+  });
+
+  it('counts today once nothing on it is still pending', async () => {
+    const today = todayKey();
+    const yesterday = addDays(today, -1);
+
+    await completeDay(yesterday);
+    await completeDay(today);
+
+    const stats = await analytics.getPeriodStats(fixture.userId, addDays(today, -3), today);
+
+    expect(stats.trackedDays).toBe(2);
     expect(stats.plannedMeals).toBe(4);
-    expect(stats.mealPercent).toBe(50);
+    expect(stats.mealPercent).toBe(100);
   });
 
   it('does not count a future day as a missed meal in the breakdown', async () => {

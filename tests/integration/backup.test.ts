@@ -175,8 +175,11 @@ describe('restoreBackup', () => {
     // Through a string, exactly as the file would travel.
     const serialised = JSON.parse(JSON.stringify(file));
 
-    // Wreck the current state.
+    // Wreck the current state. Meal ingredients go first: a food the plan still
+    // uses cannot be deleted, which is the point of the Restrict constraint.
+    await prisma.mealCompletion.deleteMany({});
     await prisma.dailyPlan.deleteMany({ where: { userId: fixture.userId } });
+    await prisma.mealIngredient.deleteMany({});
     await prisma.food.deleteMany({ where: { userId: fixture.userId } });
     expect(await prisma.food.count({ where: { userId: fixture.userId } })).toBe(0);
 
@@ -212,7 +215,7 @@ describe('restoreBackup', () => {
     expect(restoredPlan.workoutName).toBe('Push 1');
   });
 
-  it('restores into a fresh install where the user id differs', async () => {
+  it('restores into a fresh install, re-owning the data to the account doing it', async () => {
     const prisma = testPrisma();
     await addHistory();
     const file = JSON.parse(
@@ -228,14 +231,89 @@ describe('restoreBackup', () => {
 
     const result = await backup.restoreBackupWith(prisma, fresh.id, file);
     expect(result.total).toBeGreaterThan(0);
+    expect(result.username).toBe('tester');
+    // The file carried a different password hash, so the session cannot stand.
+    expect(result.credentialsChanged).toBe(true);
 
-    // The backup's own user row comes back, with its original id.
+    // One account, and it is the one that ran the restore: the ids in the file
+    // are remapped rather than trusted, so a backup can never plant rows owned
+    // by somebody else.
     const restored = await prisma.user.findMany();
     expect(restored).toHaveLength(1);
-    expect(restored[0]!.id).toBe(fixture.userId);
+    expect(restored[0]!.id).toBe(fresh.id);
+    expect(restored[0]!.username).toBe('tester');
 
+    // Everything hangs off the new id.
+    expect(await prisma.dailyPlan.count({ where: { userId: fresh.id } })).toBe(1);
+    expect(await prisma.food.count({ where: { userId: fresh.id } })).toBeGreaterThan(0);
     expect(await prisma.dailyMealItem.count()).toBe(2);
     expect(await prisma.groceryItem.count()).toBe(1);
+  });
+
+  it('refuses a row belonging to another account instead of writing it', async () => {
+    const prisma = testPrisma();
+    const file = JSON.parse(
+      JSON.stringify(await backup.exportBackupWith(prisma, fixture.userId)),
+    );
+
+    const intruder = await prisma.user.create({
+      data: { username: 'intruder', passwordHash: 'placeholder' },
+    });
+    const before = await prisma.food.count({ where: { userId: intruder.id } });
+
+    // A hand-edited file claiming the other account's id.
+    for (const food of file.data.food as Array<{ userId: string }>) {
+      food.userId = intruder.id;
+    }
+
+    await backup.restoreBackupWith(prisma, fixture.userId, file);
+
+    // The claim is ignored: the rows belong to whoever ran the restore.
+    expect(await prisma.food.count({ where: { userId: intruder.id } })).toBe(before);
+    expect(await prisma.food.count({ where: { userId: fixture.userId } })).toBeGreaterThan(0);
+  });
+
+  it('rejects an unknown column before deleting anything', async () => {
+    const prisma = testPrisma();
+    await addHistory();
+    const file = JSON.parse(
+      JSON.stringify(await backup.exportBackupWith(prisma, fixture.userId)),
+    );
+    (file.data.food as Array<Record<string, unknown>>)[0]!.favouriteColour = 'blue';
+
+    await expect(backup.restoreBackupWith(prisma, fixture.userId, file)).rejects.toThrow(
+      /"food" rows in this backup have a "favouriteColour" field/,
+    );
+
+    // Nothing was touched.
+    expect(await prisma.dailyMeal.count()).toBe(1);
+    expect(await prisma.food.count({ where: { userId: fixture.userId } })).toBeGreaterThan(0);
+  });
+
+  it('rejects a foreign key that points outside the backup', async () => {
+    const prisma = testPrisma();
+    await addHistory();
+    const file = JSON.parse(
+      JSON.stringify(await backup.exportBackupWith(prisma, fixture.userId)),
+    );
+    (file.data.dailyMeal as Array<{ dailyPlanId: string }>)[0]!.dailyPlanId = 'somewhere-else';
+
+    await expect(backup.restoreBackupWith(prisma, fixture.userId, file)).rejects.toThrow(
+      /"dailyMeal" row points at a "dailyPlan" that is not in this backup/,
+    );
+    expect(await prisma.dailyMeal.count()).toBe(1);
+  });
+
+  it('rejects a value of the wrong type without naming it', async () => {
+    const prisma = testPrisma();
+    const file = JSON.parse(
+      JSON.stringify(await backup.exportBackupWith(prisma, fixture.userId)),
+    );
+    (file.data.food as Array<Record<string, unknown>>)[0]!.name = 42;
+
+    await expect(backup.restoreBackupWith(prisma, fixture.userId, file)).rejects.toThrow(
+      /"food.name" should be text/,
+    );
   });
 
   it('rejects a file that is not a PrepTracker backup', async () => {

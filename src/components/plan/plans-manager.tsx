@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Check, Copy, Plus } from 'lucide-react';
 import {
   activateMealPlan,
@@ -11,6 +10,7 @@ import {
 } from '@/lib/actions/plan';
 import { useAction } from '@/lib/hooks/use-action';
 import { Badge } from '@/components/ui/badge';
+import { FieldError } from '@/components/ui/field-error';
 import { Button } from '@/components/ui/button';
 import { DeleteButton } from '@/components/ui/delete-button';
 import { Card } from '@/components/ui/card';
@@ -31,13 +31,10 @@ export interface PlanRow {
  * already logged — it only changes what future days are built from.
  */
 export function PlansManager({ plans }: { plans: PlanRow[] }) {
-  const router = useRouter();
   const [editing, setEditing] = useState<PlanRow | null>(null);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-
-  const refresh = () => router.refresh();
 
   const save = useAction(saveMealPlan, {
     onSuccess: () => {
@@ -45,12 +42,11 @@ export function PlansManager({ plans }: { plans: PlanRow[] }) {
       setEditing(null);
       setName('');
       setDescription('');
-      refresh();
     },
   });
-  const activate = useAction(activateMealPlan, { onSuccess: refresh });
-  const duplicate = useAction(duplicateMealPlan, { onSuccess: refresh });
-  const remove = useAction(deleteMealPlan, { onSuccess: refresh });
+  const activate = useAction(activateMealPlan);
+  const duplicate = useAction(duplicateMealPlan);
+  const remove = useAction(deleteMealPlan);
 
   const openEditor = (plan: PlanRow | null) => {
     setName(plan?.name ?? '');
@@ -137,7 +133,7 @@ export function PlansManager({ plans }: { plans: PlanRow[] }) {
               <Label htmlFor="plan-name">Name</Label>
               <Input id="plan-name" value={name} onChange={(e) => setName(e.target.value)} />
               {save.fieldErrors.name ? (
-                <p className="text-sm text-destructive">{save.fieldErrors.name[0]}</p>
+                <FieldError>{save.fieldErrors.name[0]}</FieldError>
               ) : null}
             </div>
             <div className="space-y-1.5">
@@ -149,7 +145,7 @@ export function PlansManager({ plans }: { plans: PlanRow[] }) {
                 onChange={(e) => setDescription(e.target.value)}
               />
             </div>
-            {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
+            {save.error ? <FieldError>{save.error}</FieldError> : null}
             <SheetFooter>
               <Button
                 variant="outline"

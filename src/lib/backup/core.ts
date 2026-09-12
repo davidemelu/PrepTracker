@@ -1,4 +1,6 @@
 import type { PrismaClient } from '@/generated/prisma';
+import { BACKUP_TABLES, BACKUP_VERSION, type BackupTable } from './tables';
+import { BackupValidationError, validateBackup } from './schema';
 
 /**
  * Backup and restore, independent of how the Prisma client was created.
@@ -7,7 +9,8 @@ import type { PrismaClient } from '@/generated/prisma';
  * same code serves the in-app export, the CLI scripts and the tests.
  */
 
-export const BACKUP_VERSION = 1;
+export { BACKUP_TABLES, BACKUP_VERSION, BackupValidationError };
+export type { BackupTable };
 
 export interface BackupFile {
   version: number;
@@ -15,50 +18,6 @@ export interface BackupFile {
   application: 'preptracker';
   data: Record<string, unknown[]>;
 }
-
-/**
- * Parents before children: foreign keys are enforced, so restore order matters.
- * The same order is used to write and to read.
- */
-export const BACKUP_TABLES = [
-  'user',
-  'settings',
-  'appSetting',
-  'dayType',
-  'scheduleDay',
-  'workoutFocus',
-  'scheduleDayFocus',
-  'food',
-  'foodOptionGroup',
-  'foodOptionGroupMember',
-  'planWeekPreference',
-  'mealPlan',
-  'meal',
-  'mealDayTypeSetting',
-  'mealIngredient',
-  'mealIngredientQuantity',
-  'supplement',
-  'supplementSchedule',
-  'dailyPlan',
-  'dailyWorkoutFocus',
-  'dailyMeal',
-  'dailyMealItem',
-  'mealCompletion',
-  'dailySupplement',
-  'supplementCompletion',
-  'waterEntry',
-  'dailyCheckIn',
-  'groceryWeek',
-  'groceryItem',
-  'inventoryItem',
-  'prepSession',
-  'prepTask',
-  'prepBatch',
-  'cookingYield',
-  'storagePortion',
-] as const;
-
-export type BackupTable = (typeof BACKUP_TABLES)[number];
 
 /** Scopes every table to one user, directly or through its parent. */
 export function scopesFor(userId: string): Record<BackupTable, unknown> {
@@ -102,7 +61,7 @@ export function scopesFor(userId: string): Record<BackupTable, unknown> {
 }
 
 // Prisma's delegates share a shape; this keeps the loops readable instead of
-// hand-writing 32 near-identical calls.
+// hand-writing 35 near-identical calls.
 export interface Delegate {
   findMany: (args?: unknown) => Promise<unknown[]>;
   createMany: (args: { data: unknown[] }) => Promise<{ count: number }>;
@@ -134,46 +93,63 @@ export async function exportBackupWith(
 export interface RestoreResult {
   restored: Record<string, number>;
   total: number;
+  /** The account name in the file, for the message shown afterwards. */
+  username: string;
+  /** True when the restore changed the password, so the session must be dropped. */
+  credentialsChanged: boolean;
 }
 
 /**
  * Replace everything belonging to `userId` with the backup's contents.
  *
- * Destructive by design — this is "restore", not "merge" — and wrapped in one
- * transaction, so a malformed file leaves the existing data untouched.
+ * Destructive by design — this is "restore", not "merge". Three properties hold:
+ *
+ *   - The file is fully validated before a single row is touched, so a bad file
+ *     changes nothing and says why (see `./schema`).
+ *   - Every row ends up owned by `userId`, whatever the file claimed.
+ *   - It runs in one transaction under an advisory lock, so two restores cannot
+ *     interleave and a failure half way leaves the existing data untouched.
+ *
+ * The old data is deleted table by table in reverse dependency order rather
+ * than by cascading from the user row, because the completion logs and plan
+ * ingredients are now `onDelete: Restrict` — deliberately, so that nothing else
+ * in the app can delete them by accident.
  */
 export async function restoreBackupWith(
   client: PrismaClient,
   userId: string,
-  backup: BackupFile,
+  backup: unknown,
 ): Promise<RestoreResult> {
-  if (backup.application !== 'preptracker') {
-    throw new Error('That file is not a PrepTracker backup.');
-  }
-  if (backup.version > BACKUP_VERSION) {
-    throw new Error(
-      `This backup was made by a newer version of PrepTracker (v${backup.version}). Update the app before restoring it.`,
-    );
-  }
+  const { rows, username, passwordHash } = validateBackup(backup, userId);
+
+  const current = await client.user.findUnique({
+    where: { id: userId },
+    select: { passwordHash: true },
+  });
+  const credentialsChanged = passwordHash !== null && passwordHash !== current?.passwordHash;
 
   const restored: Record<string, number> = {};
 
   await client.$transaction(
     async (tx) => {
-      const delegates = tx as unknown as ClientLike;
+      // Serialise restores for one account: two at once would race on deleting
+      // and re-inserting the same user row.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`restore:${userId}`}, 0))`;
 
-      // Deleting the user cascades to everything they own.
-      await delegates.user.deleteMany({ where: { id: userId } });
+      const delegates = tx as unknown as ClientLike;
+      const scopes = scopesFor(userId);
+
+      for (const table of [...BACKUP_TABLES].reverse()) {
+        await delegates[table].deleteMany({ where: scopes[table] });
+      }
 
       for (const table of BACKUP_TABLES) {
-        const rows = backup.data[table];
-        if (!Array.isArray(rows) || rows.length === 0) {
+        const data = rows[table];
+        if (data.length === 0) {
           restored[table] = 0;
           continue;
         }
-
-        const revived = rows.map((row) => reviveDates(row as Record<string, unknown>));
-        const result = await delegates[table].createMany({ data: revived });
+        const result = await delegates[table].createMany({ data });
         restored[table] = result.count;
       }
     },
@@ -183,18 +159,9 @@ export async function restoreBackupWith(
   return {
     restored,
     total: Object.values(restored).reduce((sum, n) => sum + n, 0),
+    username,
+    credentialsChanged,
   };
-}
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
-
-/** JSON has no Date type; turn ISO strings back into Dates for Prisma. */
-export function reviveDates(row: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(row)) {
-    out[key] = typeof value === 'string' && ISO_DATE.test(value) ? new Date(value) : value;
-  }
-  return out;
 }
 
 /** Minimal, dependency-free CSV writer with correct quoting. */
@@ -211,7 +178,11 @@ export function toCsv(rows: Array<Record<string, unknown>>): string {
         : typeof value === 'object'
           ? JSON.stringify(value)
           : String(value);
-    return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+
+    // A leading =, +, - or @ makes a spreadsheet treat the cell as a formula.
+    // Food names and notes are user text, so prefix those with an apostrophe.
+    const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+    return /[",\n\r]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
   };
 
   return [

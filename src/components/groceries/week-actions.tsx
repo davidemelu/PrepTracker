@@ -18,7 +18,6 @@ export function WeekActions({ weekId, status }: { weekId: string; status: string
   const [open, setOpen] = useState(false);
 
   const refresh = () => {
-    router.refresh();
     setOpen(false);
   };
 
@@ -27,7 +26,6 @@ export function WeekActions({ weekId, status }: { weekId: string; status: string
   const remove = useAction(deleteGroceryWeek, {
     onSuccess: () => {
       router.push('/groceries');
-      router.refresh();
     },
   });
 

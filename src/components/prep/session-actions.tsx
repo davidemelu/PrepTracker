@@ -14,7 +14,6 @@ export function SessionActions({ sessionId, status }: { sessionId: string; statu
   const [open, setOpen] = useState(false);
 
   const refresh = () => {
-    router.refresh();
     setOpen(false);
   };
 
@@ -22,7 +21,6 @@ export function SessionActions({ sessionId, status }: { sessionId: string; statu
   const remove = useAction(deletePrepSession, {
     onSuccess: () => {
       router.push('/prep');
-      router.refresh();
     },
   });
 

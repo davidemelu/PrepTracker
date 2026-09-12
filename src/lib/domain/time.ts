@@ -76,6 +76,37 @@ export function relativeMinutes(now: string, target: string, lookBackMinutes = 6
   return diff;
 }
 
+/**
+ * How late a meal has to be before it is called overdue. Short enough to be
+ * useful, long enough that a meal is not nagging about itself while you are
+ * still standing at the hob.
+ */
+export const OVERDUE_GRACE_MINUTES = 15;
+
+/**
+ * How far back a scheduled time can be and still belong to today. Beyond this
+ * the clock has wrapped and the time belongs to tomorrow's occurrence, not to a
+ * meal that is nineteen hours late.
+ */
+export const OVERDUE_WINDOW_MINUTES = 12 * 60;
+
+/**
+ * Minutes a meal is overdue by, or null when it is not overdue.
+ *
+ * The single definition. Today's rows and the reminder list used to disagree:
+ * one looked back twelve hours with a fifteen-minute grace, the other six hours
+ * with none, so a meal seven and a half hours late was overdue on the screen
+ * and absent from the reminders that are supposed to summarise it.
+ */
+export function overdueByMinutes(
+  nowTime: string,
+  scheduledTime: string,
+  graceMinutes = OVERDUE_GRACE_MINUTES,
+): number | null {
+  const delta = relativeMinutes(nowTime, scheduledTime, OVERDUE_WINDOW_MINUTES);
+  return delta < -graceMinutes ? -delta : null;
+}
+
 /** 95 -> "1h 35m", 40 -> "40m", -20 -> "20m ago" */
 export function formatDuration(minutes: number): string {
   const abs = Math.abs(Math.round(minutes));

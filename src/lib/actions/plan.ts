@@ -3,11 +3,13 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
+import { UserFacingError } from '@/lib/errors';
 import { requireUserId } from '@/lib/auth/guards';
 import { generateMealTimes } from '@/lib/domain/schedule';
 import {
   checkbox,
   cuid,
+  idSchema,
   nonEmptyName,
   numberish,
   optionalCuid,
@@ -39,7 +41,7 @@ async function assertOwnsMeal(userId: string, mealId: string) {
     where: { id: mealId, mealPlan: { userId } },
     include: { mealPlan: { select: { id: true } } },
   });
-  if (!meal) throw new Error('That meal could not be found.');
+  if (!meal) throw new UserFacingError('That meal could not be found.');
   return meal;
 }
 
@@ -82,7 +84,6 @@ export async function saveMealPlan(input: unknown): Promise<ActionResult<{ id: s
   });
 }
 
-const idSchema = z.object({ id: cuid });
 
 /** Exactly one plan is active; the others stay available to switch back to. */
 export async function activateMealPlan(input: { id: string }): Promise<ActionResult<undefined>> {
@@ -359,7 +360,7 @@ export async function saveIngredient(input: unknown): Promise<ActionResult<{ id:
 
       if (id) {
         const existing = await tx.mealIngredient.findFirst({ where: { id, mealId: values.mealId } });
-        if (!existing) throw new Error('That ingredient could not be found.');
+        if (!existing) throw new UserFacingError('That ingredient could not be found.');
         await tx.mealIngredient.update({ where: { id }, data: base });
       } else {
         const count = await tx.mealIngredient.count({ where: { mealId: values.mealId } });
@@ -409,6 +410,15 @@ export async function reorderIngredients(input: {
   return runAction(reorderIngredientsSchema, input, async ({ mealId, ids }) => {
     const userId = await requireUserId();
     await assertOwnsMeal(userId, mealId);
+
+    // Owning the meal is not the same as owning the ids. Without this the sort
+    // order of any ingredient anywhere could be rewritten by guessing its id,
+    // exactly as reorderMeals already guards against.
+    const owned = await prisma.mealIngredient.findMany({
+      where: { id: { in: ids }, mealId },
+      select: { id: true },
+    });
+    if (owned.length !== ids.length) return fail('Some ingredients could not be found.');
 
     await prisma.$transaction(
       ids.map((id, index) => prisma.mealIngredient.update({ where: { id }, data: { sortOrder: index } })),

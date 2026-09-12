@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Check, Plus, Refrigerator, Snowflake, Utensils } from 'lucide-react';
 import {
   addStoragePortion,
@@ -13,6 +12,7 @@ import {
 import { eatFirstOrder, storageActions, type StoredPortionLike } from '@/lib/domain/storage';
 import { useAction } from '@/lib/hooks/use-action';
 import { Badge } from '@/components/ui/badge';
+import { FieldError } from '@/components/ui/field-error';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { DeleteButton } from '@/components/ui/delete-button';
@@ -39,13 +39,11 @@ const LOCATION_ICON = {
  * weekday evening: is there anything I need to move out of the freezer tonight?
  */
 export function StorageManager({ portions, today }: { portions: PortionRow[]; today: string }) {
-  const router = useRouter();
   const [adding, setAdding] = useState(false);
 
-  const refresh = () => router.refresh();
-  const move = useAction(moveToFridge, { onSuccess: refresh });
-  const update = useAction(updateStoragePortion, { successToast: false, onSuccess: refresh });
-  const remove = useAction(deleteStoragePortion, { onSuccess: refresh });
+  const move = useAction(moveToFridge);
+  const update = useAction(updateStoragePortion, { successToast: false });
+  const remove = useAction(deleteStoragePortion);
 
   const actions = storageActions(portions, today);
   const moveNow = actions.filter((a) => a.kind === 'MOVE_TO_FRIDGE');
@@ -159,7 +157,7 @@ export function StorageManager({ portions, today }: { portions: PortionRow[]; to
         </Card>
       )}
 
-      <AddPortionSheet open={adding} onOpenChange={setAdding} onDone={refresh} today={today} />
+      <AddPortionSheet open={adding} onOpenChange={setAdding} onDone={() => setAdding(false)} today={today} />
     </div>
   );
 }
@@ -247,7 +245,7 @@ function AddPortionSheet({
             />
           </div>
 
-          {add.error ? <p className="text-sm text-destructive">{add.error}</p> : null}
+          {add.error ? <FieldError>{add.error}</FieldError> : null}
         </div>
 
         <SheetFooter>

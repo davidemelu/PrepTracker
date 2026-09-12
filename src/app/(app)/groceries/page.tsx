@@ -3,6 +3,7 @@ import { ChevronRight, ShoppingBasket, ShoppingCart } from 'lucide-react';
 import { requireUser } from '@/lib/auth/guards';
 import { prisma } from '@/lib/db';
 import { formatDayShort, fromDbDate, startOfWeek, todayKey } from '@/lib/domain/dates';
+import { shoppingProgress } from '@/lib/domain/grocery';
 import { suggestDayTypeCounts } from '@/lib/server/grocery-service';
 import { getSettings } from '@/lib/queries/plan';
 import { PageBody, PageHeader, SectionTitle } from '@/components/layout/page-header';
@@ -49,11 +50,7 @@ export default async function GroceriesPage() {
   const current = weeks.find((w) => w.status === 'ACTIVE' || w.status === 'DRAFT') ?? null;
   const past = weeks.filter((w) => w.id !== current?.id);
 
-  const stats = (week: (typeof weeks)[number]) => {
-    const total = week.items.length;
-    const done = week.items.filter((i) => i.purchased || i.haveAlready).length;
-    return { total, done, remaining: total - done, percent: total === 0 ? 0 : Math.round((done / total) * 100) };
-  };
+  const stats = (week: (typeof weeks)[number]) => shoppingProgress(week.items);
 
   return (
     <>

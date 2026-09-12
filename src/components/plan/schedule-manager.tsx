@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus } from 'lucide-react';
+import { Check, Plus } from 'lucide-react';
 import { deleteDayType, saveDayType, updateWeeklySchedule } from '@/lib/actions/settings';
 import { weekdayName } from '@/lib/domain/dates';
 import { useAction } from '@/lib/hooks/use-action';
@@ -23,7 +23,19 @@ export interface DayTypeRow {
   color: string;
 }
 
-const COLORS = ['#16a34a', '#0284c7', '#9333ea', '#d97706', '#dc2626', '#64748b'];
+/**
+ * Named, not just listed. "Colour #9333ea" is what a screen reader used to read
+ * out, which tells you nothing about which swatch you are on; the name is also
+ * what the selected one is announced as.
+ */
+const COLORS = [
+  { value: '#16a34a', name: 'Green' },
+  { value: '#0284c7', name: 'Blue' },
+  { value: '#9333ea', name: 'Purple' },
+  { value: '#d97706', name: 'Amber' },
+  { value: '#dc2626', name: 'Red' },
+  { value: '#64748b', name: 'Slate' },
+] as const;
 
 function DayTypeForm({
   initial,
@@ -39,7 +51,9 @@ function DayTypeForm({
   const router = useRouter();
   const [name, setName] = useState(initial?.name ?? '');
   const [isTraining, setIsTraining] = useState(initial?.isTraining ?? false);
-  const [color, setColor] = useState(initial?.color ?? COLORS[5]!);
+  const [color, setColor] = useState(initial?.color ?? COLORS[5].value);
+  const colourLabelId = useId();
+  const swatches = useRef<Array<HTMLButtonElement | null>>([]);
   const [copyFrom, setCopyFrom] = useState(dayTypes[0]?.id ?? '');
 
   const finish = () => {
@@ -59,9 +73,15 @@ function DayTypeForm({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Light training"
+          aria-invalid={save.fieldErrors.name ? true : undefined}
+          // Pointed at the message below, so the reason is read out with the
+          // field rather than being left as text nothing refers to.
+          aria-describedby={save.fieldErrors.name ? 'dt-name-error' : undefined}
         />
         {save.fieldErrors.name ? (
-          <p className="text-sm text-destructive">{save.fieldErrors.name[0]}</p>
+          <p id="dt-name-error" role="alert" className="text-sm text-destructive">
+            {save.fieldErrors.name[0]}
+          </p>
         ) : null}
       </div>
 
@@ -76,21 +96,55 @@ function DayTypeForm({
       </label>
 
       <div className="space-y-1.5">
-        <Label>Colour</Label>
-        <div className="flex gap-2">
-          {COLORS.map((option) => (
-            <button
-              key={option}
-              type="button"
-              aria-label={`Colour ${option}`}
-              onClick={() => setColor(option)}
-              className={cn(
-                'size-10 rounded-lg border-2 transition-transform',
-                color === option ? 'border-foreground scale-110' : 'border-transparent',
-              )}
-              style={{ backgroundColor: option }}
-            />
-          ))}
+        {/*
+          A plain span with an id rather than a Label, because a Label with no
+          `htmlFor` names nothing, and a group of buttons cannot be the target
+          of one. The group is a radio group with the usual keyboard pattern:
+          one tab stop, arrows between the swatches.
+        */}
+        <span id={colourLabelId} className="text-sm font-medium leading-none">
+          Colour
+        </span>
+        <div role="radiogroup" aria-labelledby={colourLabelId} className="flex gap-2">
+          {COLORS.map((option, index) => {
+            const selected = color === option.value;
+            return (
+              <button
+                key={option.value}
+                ref={(node) => {
+                  swatches.current[index] = node;
+                }}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                aria-label={option.name}
+                tabIndex={selected || (index === 0 && !COLORS.some((c) => c.value === color)) ? 0 : -1}
+                onClick={() => setColor(option.value)}
+                onKeyDown={(event) => {
+                  const last = COLORS.length - 1;
+                  let next: number | null = null;
+                  if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = index === last ? 0 : index + 1;
+                  else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = index === 0 ? last : index - 1;
+                  else if (event.key === 'Home') next = 0;
+                  else if (event.key === 'End') next = last;
+                  if (next === null) return;
+                  event.preventDefault();
+                  const target = COLORS[next];
+                  if (!target) return;
+                  setColor(target.value);
+                  swatches.current[next]?.focus();
+                }}
+                className={cn(
+                  'flex size-11 items-center justify-center rounded-lg border-2 transition-transform',
+                  selected ? 'border-foreground scale-110' : 'border-transparent',
+                )}
+                style={{ backgroundColor: option.value }}
+              >
+                {/* A tick, so the chosen swatch is not signalled by an outline alone. */}
+                {selected ? <Check className="size-5 text-white drop-shadow" strokeWidth={3} aria-hidden /> : null}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -123,7 +177,7 @@ function DayTypeForm({
         />
       ) : null}
 
-      {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
+      {save.error ? <p role="alert" className="text-sm text-destructive">{save.error}</p> : null}
 
       <SheetFooter>
         <Button variant="outline" className="flex-1" onClick={onCancel}>
