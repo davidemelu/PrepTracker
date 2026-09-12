@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
+import { UserFacingError } from '@/lib/errors';
 import { requireUserId } from '@/lib/auth/guards';
 import { toDbDate, todayKey } from '@/lib/domain/dates';
 import { currentTimeString, formatTime12h } from '@/lib/domain/time';
@@ -38,7 +39,7 @@ async function loadOwnedMeal(userId: string, dailyMealId: string) {
     where: { id: dailyMealId, dailyPlan: { userId } },
     include: { dailyPlan: { select: { date: true } } },
   });
-  if (!meal) throw new Error('That meal could not be found.');
+  if (!meal) throw new UserFacingError('That meal could not be found.');
   return meal;
 }
 

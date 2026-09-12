@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
+import { UserFacingError } from '@/lib/errors';
 import { requireUserId } from '@/lib/auth/guards';
 import { generateMealTimes } from '@/lib/domain/schedule';
 import {
@@ -39,7 +40,7 @@ async function assertOwnsMeal(userId: string, mealId: string) {
     where: { id: mealId, mealPlan: { userId } },
     include: { mealPlan: { select: { id: true } } },
   });
-  if (!meal) throw new Error('That meal could not be found.');
+  if (!meal) throw new UserFacingError('That meal could not be found.');
   return meal;
 }
 
@@ -359,7 +360,7 @@ export async function saveIngredient(input: unknown): Promise<ActionResult<{ id:
 
       if (id) {
         const existing = await tx.mealIngredient.findFirst({ where: { id, mealId: values.mealId } });
-        if (!existing) throw new Error('That ingredient could not be found.');
+        if (!existing) throw new UserFacingError('That ingredient could not be found.');
         await tx.mealIngredient.update({ where: { id }, data: base });
       } else {
         const count = await tx.mealIngredient.count({ where: { mealId: values.mealId } });

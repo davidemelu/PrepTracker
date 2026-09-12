@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { Prisma, PrismaClient } from '@/generated/prisma';
 import { prisma } from '@/lib/db';
+import { UserFacingError } from '@/lib/errors';
 import { fromDbDate, isoWeekday, startOfWeek, toDbDate, type DayKey } from '@/lib/domain/dates';
 import {
   materialiseDay,
@@ -359,7 +360,7 @@ export async function ensureDailyPlan(userId: string, date: DayKey, options: Ens
             : null) ?? (await resolveDayType(userId, date, tx)));
 
       if (!dayType) {
-        throw new Error('No day types are set up yet. Add one under Plan → Day types.');
+        throw new UserFacingError('No day types are set up yet. Add one under Plan → Day types.');
       }
 
       const planMeals = plan ? toMaterialiseMeals(plan) : [];

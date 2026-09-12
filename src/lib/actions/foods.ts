@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
+import { UserFacingError } from '@/lib/errors';
 import { requireUserId } from '@/lib/auth/guards';
 import { validateYieldPct } from '@/lib/domain/yield';
 import {
@@ -304,7 +305,7 @@ export async function saveOptionGroup(input: unknown): Promise<ActionResult<{ id
 
       if (id) {
         const existing = await tx.foodOptionGroup.findFirst({ where: { id, userId } });
-        if (!existing) throw new Error('That group could not be found.');
+        if (!existing) throw new UserFacingError('That group could not be found.');
         await tx.foodOptionGroup.update({
           where: { id },
           data: { name: values.name, notes: values.notes ?? null, preferredFoodId: preferred },
