@@ -1,0 +1,29 @@
+# Line endings.
+#
+# This repository is edited on Windows and every script in it runs on Linux,
+# inside a container. Git stores LF, but a checkout with core.autocrlf=true
+# rewrites the working tree to CRLF — and `docker build` copies the working
+# tree, not the commit. A shell script that arrives with CRLF has a shebang of
+# `#!/bin/sh\r`, so the kernel looks for an interpreter with a carriage return
+# in its name, and the container dies with:
+#
+#   exec /usr/local/bin/migrate-entrypoint.sh failed: No such file or directory
+#
+# which is exit 127 and reads like a missing file rather than a missing
+# newline. CI never sees it either: a Linux runner checks out LF whatever this
+# setting says, so the build passes there and fails on the machine that deploys.
+#
+# Normalising everything to LF removes the whole class of problem. There are no
+# Windows batch or PowerShell scripts in this repository; add an `eol=crlf`
+# line here if one is ever added.
+* text=auto eol=lf
+
+# Binary, so Git never tries to "fix" the bytes.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.gz binary
