@@ -2,19 +2,16 @@ import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth/guards';
 import { prisma } from '@/lib/db';
 import { formatDayShort, fromDbDate } from '@/lib/domain/dates';
+import { batchStage } from '@/lib/domain/prep-stage';
 import { PageBody, PageHeader, SectionTitle } from '@/components/layout/page-header';
 import { BatchCard, type BatchRow } from '@/components/prep/batch-card';
 import { PrepTasks, type PrepTaskRow } from '@/components/prep/prep-tasks';
 import { SessionActions } from '@/components/prep/session-actions';
-import { Card } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
-export default async function PrepSessionPage({
-  params,
-}: {
-  params: Promise<{ sessionId: string }>;
-}) {
+export default async function PrepSessionPage({ params }: { params: Promise<{ sessionId: string }> }) {
   const user = await requireUser();
   const { sessionId } = await params;
 
@@ -26,7 +23,6 @@ export default async function PrepSessionPage({
         orderBy: { sortOrder: 'asc' },
         include: {
           food: { select: { cookingYieldPct: true } },
-          _count: { select: { storagePortions: true } },
           storagePortions: { select: { portions: true } },
         },
       },
@@ -62,7 +58,10 @@ export default async function PrepSessionPage({
     done: task.done,
   }));
 
-  const cooked = batches.filter((b) => b.cookedWeightG != null).length;
+  const stages = batches.map(batchStage);
+  const activeIndex = stages.findIndex((s) => s !== 'done');
+  const doneCount = stages.filter((s) => s === 'done').length;
+  const tasksDone = tasks.filter((t) => t.done).length;
 
   return (
     <>
@@ -74,31 +73,40 @@ export default async function PrepSessionPage({
       />
 
       <PageBody>
-        <Card className="p-4">
-          <p className="text-sm">
-            <span className="tabular font-semibold">{cooked}</span> of{' '}
-            <span className="tabular font-semibold">{batches.length}</span> batches cooked ·{' '}
-            <span className="tabular font-semibold">{tasks.filter((t) => t.done).length}</span> of{' '}
-            <span className="tabular font-semibold">{tasks.length}</span> tasks done
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Covering {session.trainingDays} training and {session.restDays} rest days.
-          </p>
-        </Card>
+        {batches.length > 0 ? (
+          <div className="space-y-2">
+            <div className="flex flex-col gap-0.5">
+              <span className="font-semibold">
+                {activeIndex === -1 ? 'All batches done' : `Batch ${activeIndex + 1} of ${batches.length}`}
+              </span>
+              <span className="text-sm text-muted-foreground">{batches.map((b) => b.foodName).join(' · ')}</span>
+            </div>
+            <div className="flex gap-1.5" aria-hidden>
+              {stages.map((stage, index) => (
+                <div key={batches[index]!.id} className="h-1 flex-1 overflow-hidden rounded-full bg-secondary">
+                  <div
+                    className={cn('h-full rounded-full', stage === 'done' ? 'w-full bg-success' : index === activeIndex ? 'bg-primary' : 'w-0')}
+                    style={index === activeIndex ? { width: stage === 'raw' ? '15%' : stage === 'cooked' ? '50%' : '85%' } : undefined}
+                  />
+                </div>
+              ))}
+            </div>
+            <p className="sr-only">
+              {doneCount} of {batches.length} batches done.
+            </p>
+          </div>
+        ) : null}
 
         <section className="space-y-2">
-          <SectionTitle>Cook</SectionTitle>
-          <p className="px-1 text-xs text-muted-foreground">
-            Weigh the raw food, cook it, then weigh the result. PrepTracker works out your real yield and
-            how many portions you got, and uses it to sharpen the next shopping list.
-          </p>
-          {batches.map((batch) => (
-            <BatchCard key={batch.id} batch={batch} prepDate={prepDate} />
+          {batches.map((batch, index) => (
+            <BatchCard key={batch.id} batch={batch} prepDate={prepDate} daysCovered={session.daysCovered} active={index === activeIndex} />
           ))}
         </section>
 
         <section className="space-y-2">
-          <SectionTitle>Tasks</SectionTitle>
+          <SectionTitle>
+            Tasks <span className="tabular normal-case tracking-normal">{tasksDone} of {tasks.length}</span>
+          </SectionTitle>
           <PrepTasks prepSessionId={session.id} tasks={tasks} />
         </section>
       </PageBody>

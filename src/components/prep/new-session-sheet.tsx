@@ -6,15 +6,21 @@ import { Plus } from 'lucide-react';
 import { createPrepSession } from '@/lib/actions/prep';
 import { todayKey } from '@/lib/domain/dates';
 import { useAction } from '@/lib/hooks/use-action';
-import { Button } from '@/components/ui/button';
+import { Button, type ButtonProps } from '@/components/ui/button';
 import { Input, NumberInput } from '@/components/ui/input';
 import { Label } from '@/components/ui/primitives';
 import { Sheet, SheetContent, SheetFooter } from '@/components/ui/sheet';
 
 export function NewSessionSheet({
   dayTypes,
+  triggerLabel = 'New session',
+  triggerVariant = 'ghost',
+  triggerSize = 'sm',
 }: {
   dayTypes: Array<{ dayTypeId: string; dayTypeName: string; days: number }>;
+  triggerLabel?: string;
+  triggerVariant?: ButtonProps['variant'];
+  triggerSize?: ButtonProps['size'];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -36,23 +42,18 @@ export function NewSessionSheet({
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <Button size="sm" onClick={() => setOpen(true)}>
+      <Button
+        size={triggerSize}
+        variant={triggerVariant}
+        className={triggerVariant === 'ghost' ? 'text-primary' : undefined}
+        onClick={() => setOpen(true)}
+      >
         <Plus className="size-4" />
-        Prep
+        {triggerLabel}
       </Button>
 
-      <SheetContent title="New prep session" description="Works out how much of each food to cook.">
+      <SheetContent title="Plan a prep session" description="Works out how much of each food to cook.">
         <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="ps-name">Name</Label>
-            <Input
-              id="ps-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Sunday prep"
-            />
-          </div>
-
           <div className="space-y-1.5">
             <Label htmlFor="ps-date">Prep date</Label>
             <input
@@ -74,15 +75,18 @@ export function NewSessionSheet({
                 <NumberInput
                   id={`ps-${dayType.dayTypeId}`}
                   value={counts[dayType.dayTypeId] ?? '0'}
-                  onChange={(e) =>
-                    setCounts((prev) => ({ ...prev, [dayType.dayTypeId]: e.target.value }))
-                  }
+                  onChange={(e) => setCounts((prev) => ({ ...prev, [dayType.dayTypeId]: e.target.value }))}
                 />
                 <span className="w-10 shrink-0 text-sm text-muted-foreground">days</span>
               </div>
             ))}
             <p className="text-xs text-muted-foreground">{total} days in total.</p>
           </fieldset>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="ps-name">Name (optional)</Label>
+            <Input id="ps-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Sunday prep" />
+          </div>
 
           {create.error ? <p className="text-sm text-destructive">{create.error}</p> : null}
         </div>
@@ -98,9 +102,7 @@ export function NewSessionSheet({
               create.run({
                 name: name || undefined,
                 date,
-                dayTypeCounts: Object.fromEntries(
-                  Object.entries(counts).map(([id, value]) => [id, Number(value) || 0]),
-                ),
+                dayTypeCounts: Object.fromEntries(Object.entries(counts).map(([id, value]) => [id, Number(value) || 0])),
               } as unknown as Parameters<typeof createPrepSession>[0])
             }
           >
