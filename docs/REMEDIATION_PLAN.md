@@ -5,8 +5,41 @@ files, scope (S = under half a day, M = one to two days, L = three days or more)
 depends on, and how to prove it is done. Tasks within a phase are ordered; phases are ordered
 by risk, not by effort.
 
-Nothing here has been started. The audit created only `docs/ENGINEERING_AUDIT.md`, this file,
-`docs/COMMIT_GUIDE.md` and `.github/pull_request_template.md`.
+---
+
+## Status — 2026-09-12
+
+Phases 0 to 5 are implemented on `fix/engineering-audit-remediation`; what each change closes
+is recorded in [IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md).
+
+| Phase | State |
+| --- | --- |
+| 0 · Critical | Done. The repository was pushed and the redesign merged as pull request #1 before this work began; `v0.1.0` tags that baseline and `package.json` follows it. |
+| 1 · Data integrity and security | Done, except 1.11's off-host copy and restore verification, which need a destination and a key only the owner can provide. |
+| 2 · Architecture and maintainability | Done except **2.4** (splitting `day-service.ts`, `prep.ts`, `plan.ts`) and the cast half of **2.2**. Both are deferred deliberately — see below. |
+| 3 · Testing and CI | Done. 422 unit and integration tests, 4 end-to-end journeys, and a workflow gating pull requests. |
+| 4 · Mobile and PWA | Done, except the manifest `screenshots` entries, which need screenshot assets that do not exist yet. |
+| 5 · Deployment and backup | Done. The runtime image no longer carries the Prisma CLI, migrations run as a one-shot service, and backups ship with the deployment. |
+| 6 · Polish and developer experience | Partly. Licence, editorconfig, nvmrc, security policy, issue templates and Dependabot are in; Prettier and lint-staged (6.2) are not. |
+
+### Deliberately deferred
+
+- **2.4, splitting the three largest server files.** The reconcile rewrite in 1.1 was the
+  reason to do it, and that is done; what remains is moving code between files with no
+  behaviour change. It is the highest-risk-to-benefit item in the plan and belongs in its own
+  pull request where the diff is reviewable as a pure move.
+- **The `as unknown as Parameters<...>` casts in 2.2.** Removing them properly means exporting
+  a `z.input` type per action and threading it through twenty-two call sites. The double-fetch
+  half of 2.2, which was the P1, is done.
+- **`MealPlan.archivedAt`** stays despite never being written. Dropping a column would make
+  every backup taken before today fail the new validation, which costs more than a dead column.
+- **The partial unique index on one active plan per user.** Prisma cannot express a partial
+  index, so it would have to be raw SQL that the next `migrate dev` tries to drop. The
+  transaction in `activateMealPlan` already prevents the case that matters.
+
+---
+
+
 
 ---
 
