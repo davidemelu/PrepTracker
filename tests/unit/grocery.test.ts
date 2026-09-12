@@ -7,6 +7,7 @@ import {
   groupByCategory,
   groupByDepartment,
   resolveIngredientFood,
+  shoppingProgress,
   type FoodInfo,
   type GroceryGenerationInput,
   type PlanMeal,
@@ -575,5 +576,26 @@ describe('cookingRequirements', () => {
     expect(requirement.rawQty).toBeNull();
     // Still flagged as a yield-tracked food so Prep can say the yield is unset.
     expect(requirement.tracksYield).toBe(true);
+  });
+});
+
+describe('shoppingProgress', () => {
+  const item = (purchased: boolean, haveAlready = false) => ({ purchased, haveAlready });
+
+  it('counts what is in the trolley and what was already in the cupboard', () => {
+    const progress = shoppingProgress([item(true), item(false, true), item(false), item(false)]);
+    expect(progress.total).toBe(4);
+    expect(progress.done).toBe(2);
+    expect(progress.remaining).toBe(2);
+    expect(progress.percent).toBe(50);
+  });
+
+  it('reports an empty list as nothing done rather than everything done', () => {
+    expect(shoppingProgress([]).percent).toBe(0);
+  });
+
+  it('reaches 100 only when nothing is left', () => {
+    expect(shoppingProgress([item(true), item(true)]).percent).toBe(100);
+    expect(shoppingProgress([item(true), item(false)]).percent).toBe(50);
   });
 });

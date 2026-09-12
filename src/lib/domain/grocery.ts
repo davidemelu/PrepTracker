@@ -621,3 +621,32 @@ export function cookingRequirements(input: GroceryGenerationInput): CookRequirem
       tracksYield: line.rawForCookedQty != null || line.missingYield,
     }));
 }
+
+export interface ShoppingProgress {
+  total: number;
+  done: number;
+  remaining: number;
+  /** Whole percent, for a bar and for "63% bought". */
+  percent: number;
+}
+
+/**
+ * How far through a shopping list you are.
+ *
+ * An item counts as done when it is in the trolley or was already in the
+ * cupboard, which is the same question from the shopper's point of view. Two
+ * screens ask it, and an empty list is 0% rather than 100% so a list that has
+ * not been generated yet does not read as finished.
+ */
+export function shoppingProgress(
+  items: readonly { purchased: boolean; haveAlready: boolean }[],
+): ShoppingProgress {
+  const total = items.length;
+  const done = items.filter((item) => item.purchased || item.haveAlready).length;
+  return {
+    total,
+    done,
+    remaining: total - done,
+    percent: total === 0 ? 0 : Math.round((done / total) * 100),
+  };
+}

@@ -6,7 +6,7 @@ import { Check, ChevronDown, ChevronRight, Loader2, Snowflake } from 'lucide-rea
 import { toast } from 'sonner';
 import { storeBatchPortions, updatePrepBatch } from '@/lib/actions/prep';
 import { batchStage } from '@/lib/domain/prep-stage';
-import { planPortions } from '@/lib/domain/yield';
+import { cookedToRaw, measureYield, planPortions } from '@/lib/domain/yield';
 import { formatAmount } from '@/lib/domain/units';
 import { useAction } from '@/lib/hooks/use-action';
 import { Button } from '@/components/ui/button';
@@ -89,14 +89,21 @@ export function BatchCard({
   });
   const store = useAction(storeBatchPortions, { successToast: false });
 
+  // Both of these were worked out here with their own rounding, so the number
+  // shown live and the number the server stored disagreed in the last digit.
   const suggestedRaw =
-    batch.targetCookedG != null && batch.expectedYieldPct ? Math.round(batch.targetCookedG / (batch.expectedYieldPct / 100)) : null;
+    batch.targetCookedG != null && batch.expectedYieldPct
+      ? Math.round(cookedToRaw(batch.targetCookedG, batch.expectedYieldPct))
+      : null;
 
   const rawNow = toNumber(raw);
   const cookedNow = toNumber(cooked);
   const sizeNow = toNumber(portionSize) ?? batch.portionSizeG;
   const preview = cookedNow != null && sizeNow > 0 ? planPortions(cookedNow, sizeNow, batch.portionsPlanned ?? undefined) : null;
-  const liveYield = rawNow != null && rawNow > 0 && cookedNow != null ? Math.round((cookedNow / rawNow) * 1000) / 10 : null;
+  const liveYield =
+    rawNow != null && rawNow > 0 && cookedNow != null && cookedNow >= 0
+      ? measureYield(rawNow, cookedNow)
+      : null;
 
   const submitRaw = () =>
     save.run({ id: batch.id, rawWeightG: rawNow ?? suggestedRaw ?? undefined } as unknown as Parameters<typeof updatePrepBatch>[0]);

@@ -4,6 +4,7 @@ import {
   formatWater,
   isProbableDuplicate,
   lastEntry,
+  progressFromTotal,
   validateWaterAmount,
   waterAdherence,
   waterProgress,
@@ -127,5 +128,35 @@ describe('averageDailyWater and waterAdherence', () => {
 
   it('scores a day with no target as met', () => {
     expect(waterAdherence([{ date: 'd', totalMl: 0, targetMl: 0, percent: 0 }])).toBe(100);
+  });
+});
+
+describe('progressFromTotal', () => {
+  it('describes a running total the same way a list of entries is described', () => {
+    const fromEntries = waterProgress(
+      [
+        { id: 'a', amountMl: 250, createdAt: '2026-09-14T08:00:00.000Z' },
+        { id: 'b', amountMl: 500, createdAt: '2026-09-14T09:00:00.000Z' },
+      ],
+      4000,
+    );
+    const fromTotal = progressFromTotal(750, 4000);
+
+    expect(fromTotal.totalMl).toBe(fromEntries.totalMl);
+    expect(fromTotal.percent).toBe(fromEntries.percent);
+    expect(fromTotal.remainingMl).toBe(fromEntries.remainingMl);
+    expect(fromTotal.goalReached).toBe(fromEntries.goalReached);
+  });
+
+  it('never reports a negative total or a negative remainder', () => {
+    expect(progressFromTotal(-500, 4000).totalMl).toBe(0);
+    expect(progressFromTotal(5000, 4000).remainingMl).toBe(0);
+    expect(progressFromTotal(Number.NaN, 4000).totalMl).toBe(0);
+  });
+
+  it('reports nothing rather than everything when no target is set', () => {
+    const progress = progressFromTotal(1000, 0);
+    expect(progress.percent).toBe(0);
+    expect(progress.goalReached).toBe(false);
   });
 });
