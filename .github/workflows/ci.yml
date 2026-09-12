@@ -1,0 +1,204 @@
+name: CI
+
+# Runs on every pull request and on every push to main, which is what branch
+# protection requires before a merge. The image job runs only on pushes: there
+# is nothing to scan on a pull request that the check job has not already told
+# us, and building an image on every push to a branch wastes ten minutes.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+# A second push to the same branch makes the first run irrelevant.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # The integration suite derives preptracker_test from this, and
+  # prisma.config.ts needs it to resolve the datasource even for commands that
+  # never connect.
+  DATABASE_URL: postgresql://preptracker:preptracker@localhost:5432/preptracker?schema=public
+  SHADOW_DATABASE_URL: postgresql://preptracker:preptracker@localhost:5432/preptracker_shadow
+  AUTH_SECRET: ci-placeholder-secret-value-0123456789abcdef
+  NEXT_TELEMETRY_DISABLED: '1'
+  # Meal times, "today" and overdue all depend on the zone. The suite must run
+  # in the zone the application is deployed in, or a test that passes here fails
+  # on the server.
+  TZ: America/Los_Angeles
+
+jobs:
+  check:
+    name: Lint, types, schema, tests, build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: preptracker
+          POSTGRES_PASSWORD: preptracker
+          POSTGRES_DB: preptracker
+          # Matches docker-compose.yml, so index and ordering behaviour in CI is
+          # the behaviour on the server.
+          POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U preptracker"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Everything after this needs the generated client: tsc reads its types,
+      # and the tests import it. There is no postinstall that does this.
+      - name: Generate the Prisma client
+        run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint
+
+      # Formatting check goes here once Prettier is added (remediation task 6.2):
+      #   npx prettier --check .
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Validate the schema
+        run: npx prisma validate
+
+      - name: Create the shadow database
+        run: psql "postgresql://preptracker:preptracker@localhost:5432/postgres" -c 'CREATE DATABASE preptracker_shadow'
+        env:
+          PGPASSWORD: preptracker
+
+      # The migrations and the schema are two descriptions of the same database
+      # and nothing keeps them in step. This replays every migration into the empty
+      # shadow database and compares the result with schema.prisma. Exit code 2
+      # means they differ, which is what catches a schema edited without a
+      # migration being created for it.
+      #
+      # Prisma 7 takes the shadow database from the config file rather than a
+      # flag, so this uses a CI-only config; see the comment in that file.
+      - name: Migrations match the schema
+        run: |
+          npx prisma migrate diff \
+            --config scripts/ci/prisma.config.ci.ts \
+            --from-migrations prisma/migrations \
+            --to-schema prisma/schema.prisma \
+            --exit-code
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      # Creates and migrates its own preptracker_test database against the
+      # service container above.
+      - name: Integration tests
+        run: npm run test:integration
+
+      - name: Build
+        run: npm run build
+
+      # --omit=dev --omit=optional is the tree that actually ships. The four high
+      # advisories in this project are all reached through the Prisma CLI
+      # (mysql2 twice, deepmerge-ts via @prisma/config); the CLI is a development
+      # and migration tool, is not in the runtime image, and none of it is a
+      # MySQL driver this Postgres application could ever load. Auditing the
+      # runtime tree is the honest check — an allow-list would also hide a real
+      # advisory in a package the app does run.
+      - name: Audit the production dependency tree
+        run: npm audit --omit=dev --omit=optional --audit-level=high
+
+  image:
+    name: Build and scan the images
+    needs: check
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work out the tags
+        id: meta
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=main" >> "$GITHUB_OUTPUT"
+          fi
+          echo "sha=sha-$(echo "$GITHUB_SHA" | cut -c1-12)" >> "$GITHUB_OUTPUT"
+
+      # All three targets, so a Dockerfile change that breaks the migrate or
+      # backup image is caught here rather than on the server at deploy time.
+      - name: Build the runtime image
+        run: |
+          docker build --target runner \
+            -t preptracker:${{ steps.meta.outputs.version }} \
+            -t preptracker:${{ steps.meta.outputs.sha }} \
+            .
+
+      - name: Build the migrate image
+        run: docker build --target migrate -t preptracker-migrate:${{ steps.meta.outputs.version }} .
+
+      - name: Build the backup image
+        run: docker build --target backup -t preptracker-backup:${{ steps.meta.outputs.version }} .
+
+      # The runtime image is the one reachable from the network, so it is the one
+      # the build fails for. --ignore-unfixed keeps the gate on things that can
+      # actually be acted on: an advisory with no fixed version available is a
+      # thing to know about, not a reason to block a release.
+      - name: Scan the runtime image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: preptracker:${{ steps.meta.outputs.sha }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Scan the migrate and backup images (report only)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: preptracker-migrate:${{ steps.meta.outputs.version }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '0'
+
+      # There is no registry to publish to: this is a single home server that
+      # builds from a checkout. To publish to GHCR instead, add
+      #   permissions: { contents: read, packages: write }
+      # to this job and uncomment the two steps below; then change
+      # docker-compose.yml to `image: ghcr.io/<owner>/preptracker:${PREPTRACKER_TAG}`
+      # and drop the `build:` block, so the server pulls rather than builds.
+      #
+      # - name: Sign in to GHCR
+      #   uses: docker/login-action@v3
+      #   with:
+      #     registry: ghcr.io
+      #     username: ${{ github.actor }}
+      #     password: ${{ secrets.GITHUB_TOKEN }}
+      #
+      # - name: Push
+      #   run: |
+      #     for target in preptracker preptracker-migrate preptracker-backup; do
+      #       docker tag "$target:${{ steps.meta.outputs.version }}" \
+      #         "ghcr.io/${{ github.repository_owner }}/$target:${{ steps.meta.outputs.version }}"
+      #       docker push "ghcr.io/${{ github.repository_owner }}/$target:${{ steps.meta.outputs.version }}"
+      #     done
