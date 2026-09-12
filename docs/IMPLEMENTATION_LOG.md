@@ -78,7 +78,78 @@ when viewing another date.
 Captures of the rebuilt Today at 430 × 932 (light, dark, expanded row, day-state confirmation,
 workout sheet) are in `docs/audit-screenshots/after-*.png`.
 
-### Not in this slice
+## Slice 2 · Groceries, Prep, Week, Plan, Settings, confirmations (2026-09-11)
 
-Groceries landing, Prep guided flow, Week view, Plan grouping, Settings regrouping, the
-confirmation sheet on the other screens, and queued offline writes. See the audit's phased plan.
+Approved with "do the remaining".
+
+### Groceries (closes H12, H13, M13, M14 phrasing)
+
+- Landing opens on the current list as one card: name, "12 items remaining", progress, a 52 px
+  **Shop** button, "Review list". Empty state carries "Generate this week's list". Past lists
+  are a compact archive. `groceries/page.tsx`.
+- Generation sheet leads with the date and day counts; name, inventory, supplements and optional
+  ingredients sit behind "Options". `new-week-sheet.tsx`.
+- Planning list rows are one line each (checkbox, name, "Buy 3.27 kg · 4 packs of 1 kg"); the
+  reasons, "I already have this", edit and remove live in a per-item sheet. Missing-yield warning
+  is one row linking to Yields. `grocery-list.tsx`.
+- Shopping Mode: "Remaining | All" segmented control replaces the switch, search collapses to an
+  icon, ticked items drop into a collapsed "In the trolley · N" group, pack counts read "2 packs
+  of 6", counter is a live region. `shopping-mode.tsx`.
+
+### Prep (closes H11, storage tiles from the spec)
+
+- Landing: READY / FREEZER / THAW TONIGHT tiles (thaw tile in warning colour when due), a
+  "move to the fridge" row, the current session with **Start prep / Continue prep**, an empty
+  state with "Plan a prep session", past sessions, yields. `prep/page.tsx`.
+- Session page: a batch rail ("Batch 1 of 4" with per-batch progress), and each batch as a
+  three-step card: weigh raw (suggested amount prefilled) → cook and weigh (live yield and
+  portions, portion size behind a disclosure) → store (portions per day, uses the fridge-days
+  rule). The active batch is open; finished batches collapse to one line. `batch-card.tsx`,
+  `prep/[sessionId]/page.tsx`, `lib/domain/prep-stage.ts`.
+- Storage rows use 44 px actions and a confirmed remove.
+
+### Week view (closes H14, M21)
+
+- `/plan/week` is "This week": one sentence of summary, one row per day (weekday and date, day
+  type word chip, workout, one wrapping stats line, score for finished days), expandable to
+  planned → eaten times with an "Open this day" link. Untracked past days read "No record",
+  future days "Planned". No ring, no bar table, no overflow at 320 px. `week-day-row.tsx`.
+
+### Plan (closes M8, M9, M23)
+
+- Plan shows one portion column at a time with a Training | Rest control. Setup links grouped
+  into Routine and Library. `plan-meal-list.tsx`, `plan/page.tsx`.
+- "Training days & workouts" merges the weekly pattern, day types, usual workouts and the
+  workout catalogue on `/plan/schedule`; `/plan/workouts` redirects there.
+- Ingredient sheet order: food → amount per day type → "More" (unit, weighed state, optional,
+  note). `ingredient-form.tsx`.
+
+### Settings (closes M10, M11, L4)
+
+- Groups: Water · Meals & timing (first meal, usual training, last-meal window, bedtime,
+  automatic times, link to spacing rules) · Training days & workouts (link with a weekday
+  summary) · Storage & prep · Reminders · Appearance (labelled theme control). One save per group
+  with an inline "Saved" state; no success toasts. The water target now applies to the local
+  day, not the UTC day. Theme control moved off the More header. More lists "This week" under
+  Insights.
+
+### Confirmations (closes H15)
+
+- `ui/delete-button.tsx`: every permanent delete (grocery list, grocery item, prep session,
+  storage portion, food, meal, ingredient, plan, day type, supplement, workout focus, substitution
+  group, inventory item) opens the same confirmation sheet with the consequence spelled out. No
+  native `confirm()` remains.
+
+### Verification
+
+`tsc`, `eslint`, 364 unit and integration tests, and both end-to-end journeys pass on a
+production build. Screenshots of the new screens at 430 × 932 are in
+`docs/audit-screenshots/after2-*.png`.
+
+### Deliberately not built: queued offline writes
+
+The visible half of C5 is done (offline banner, retained input on failure). Replaying mutations
+recorded while offline needs an engineering design first: idempotency keys on every action,
+conflict rules (a meal marked eaten offline, then edited online), and a background sync
+trigger. That belongs to the engineering audit rather than a UI slice, so it is left out on
+purpose rather than half-built.
