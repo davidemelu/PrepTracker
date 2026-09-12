@@ -3,14 +3,31 @@
 # Bound to 127.0.0.1 by default: nothing is reachable from the network until you
 # deliberately change APP_BIND (see docs/DEPLOYMENT.md for LAN, Tailscale and
 # reverse-proxy options).
+#
+# Four services, because they have four different jobs and four different risks:
+#
+#   db       Postgres. Never published; reached only over the compose network.
+#   migrate  Runs once per deployment: applies migrations, seeds an empty
+#            database, then exits. The app waits for it to exit 0.
+#   app      The Next.js server. No Prisma CLI, no psql, nothing but the app.
+#   backup   Nightly dump, weekly off-host copy, weekly restore verification.
 
 name: preptracker
+
+# Docker's json-file driver grows without limit by default, which on a home
+# server eventually fills the disk the database is on.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '5'
 
 services:
   db:
     image: postgres:16-alpine
     container_name: preptracker-db
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-preptracker}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
@@ -19,7 +36,9 @@ services:
       POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
     volumes:
       - preptracker_db:/var/lib/postgresql/data
-      - ./backups:/backups
+      # Read-only: restoring reads a dump from here, and nothing in this
+      # container has any business writing one.
+      - ./backups:/backups:ro
     healthcheck:
       test:
         ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-preptracker} -d ${POSTGRES_DB:-preptracker}']
@@ -30,29 +49,138 @@ services:
     # The database is only ever reached by the app over the compose network.
     expose:
       - '5432'
+    # Postgres starts as root to fix ownership of the data directory and then
+    # drops to the postgres user, which needs exactly these five. Everything
+    # else — raw sockets, mknod, ptrace — goes.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
 
-  app:
+  migrate:
     build:
       context: .
       dockerfile: Dockerfile
-    image: preptracker:latest
-    container_name: preptracker-app
-    restart: unless-stopped
+      target: migrate
+    image: preptracker-migrate:${PREPTRACKER_TAG:-latest}
+    container_name: preptracker-migrate
+    # One shot. Restarting it would re-run a migration that has already been
+    # applied, or retry one that failed for a reason retrying cannot fix.
+    restart: 'no'
+    logging: *logging
     depends_on:
       db:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-preptracker}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-preptracker}?schema=public
-      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is required}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      TZ: ${TZ:-UTC}
+      # The backup gate: how recent a dump has to be before a pending migration
+      # is allowed to touch a database that already holds data.
+      BACKUP_MAX_AGE_HOURS: ${BACKUP_MAX_AGE_HOURS:-48}
+      SKIP_BACKUP_GATE: ${SKIP_BACKUP_GATE:-0}
+    volumes:
+      # Read-only: it only needs to know whether a recent dump exists.
+      - ./backups:/backups:ro
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 512M
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    image: preptracker:${PREPTRACKER_TAG:-latest}
+    container_name: preptracker-app
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      db:
+        condition: service_healthy
+      # The app never starts against a schema that has not been migrated, and a
+      # failed migration stops the deployment instead of crash-looping the app.
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-preptracker}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-preptracker}?schema=public
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is required}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       TZ: ${TZ:-UTC}
       PORT: '3000'
     ports:
       - '${APP_BIND:-127.0.0.1}:${APP_PORT:-3000}:3000'
+    # No ./backups mount. The app never writes a dump, and every dump contains
+    # the password hash and the full history, so the process reachable from the
+    # network is the last one that should be able to read them.
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+
+  backup:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backup
+    image: preptracker-backup:${PREPTRACKER_TAG:-latest}
+    container_name: preptracker-backup
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: '5432'
+      PGUSER: ${POSTGRES_USER:-preptracker}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      PGDATABASE: ${POSTGRES_DB:-preptracker}
+      TZ: ${TZ:-UTC}
+      BACKUP_TIME: ${BACKUP_TIME:-03:15}
+      BACKUP_WEEKLY_DAY: ${BACKUP_WEEKLY_DAY:-7}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      # Off-host copy. Unset by default, and the service says so loudly on every
+      # start, because a backup on the same disk as the database is not one.
+      BACKUP_SECONDARY_DIR: ${BACKUP_SECONDARY_DIR:-}
+      BACKUP_RSYNC_TARGET: ${BACKUP_RSYNC_TARGET:-}
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:-}
+      BACKUP_ALLOW_UNENCRYPTED: ${BACKUP_ALLOW_UNENCRYPTED:-0}
     volumes:
-      - ./backups:/app/backups
+      - ./backups:/backups
+      # Uncomment one of these to get the weekly copy off this machine.
+      # See docs/DEPLOYMENT.md § Backups.
+      #
+      # A second disk, a NAS mount, or a USB drive:
+      #   - /mnt/backup-drive/preptracker:/backups-secondary
+      #   and set BACKUP_SECONDARY_DIR=/backups-secondary
+      #
+      # Another machine on the tailnet over ssh:
+      #   - ${BACKUP_SSH_KEY_FILE:-./secrets/backup_ssh_key}:/run/secrets/backup_ssh_key:ro
+      #   and set BACKUP_RSYNC_TARGET=user@host:/srv/preptracker-backups
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 256M
 
 volumes:
   preptracker_db:

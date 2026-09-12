@@ -10,6 +10,14 @@ services:
     image: postgres:16-alpine
     container_name: preptracker-db-dev
     restart: unless-stopped
+    # Same reason as the production stack: the json-file driver is unbounded by
+    # default, and a development database left running for months will fill a
+    # disk with query logs nobody reads.
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '5'
     environment:
       POSTGRES_USER: preptracker
       POSTGRES_PASSWORD: preptracker
