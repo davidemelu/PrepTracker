@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Check, Copy, Plus } from 'lucide-react';
 import {
   activateMealPlan,
@@ -31,13 +30,10 @@ export interface PlanRow {
  * already logged — it only changes what future days are built from.
  */
 export function PlansManager({ plans }: { plans: PlanRow[] }) {
-  const router = useRouter();
   const [editing, setEditing] = useState<PlanRow | null>(null);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-
-  const refresh = () => router.refresh();
 
   const save = useAction(saveMealPlan, {
     onSuccess: () => {
@@ -45,12 +41,11 @@ export function PlansManager({ plans }: { plans: PlanRow[] }) {
       setEditing(null);
       setName('');
       setDescription('');
-      refresh();
     },
   });
-  const activate = useAction(activateMealPlan, { onSuccess: refresh });
-  const duplicate = useAction(duplicateMealPlan, { onSuccess: refresh });
-  const remove = useAction(deleteMealPlan, { onSuccess: refresh });
+  const activate = useAction(activateMealPlan);
+  const duplicate = useAction(duplicateMealPlan);
+  const remove = useAction(deleteMealPlan);
 
   const openEditor = (plan: PlanRow | null) => {
     setName(plan?.name ?? '');

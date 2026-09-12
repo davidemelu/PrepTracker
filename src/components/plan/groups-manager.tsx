@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Plus, Replace } from 'lucide-react';
 import { deleteOptionGroup, saveOptionGroup, setOptionPreference } from '@/lib/actions/foods';
 import { useAction } from '@/lib/hooks/use-action';
@@ -40,14 +39,12 @@ function GroupForm({
   onDone: () => void;
   onCancel: () => void;
 }) {
-  const router = useRouter();
   const [name, setName] = useState(initial?.name ?? '');
   const [notes, setNotes] = useState(initial?.notes ?? '');
   const [foodIds, setFoodIds] = useState<string[]>(initial?.members.map((m) => m.id) ?? []);
   const [preferredFoodId, setPreferredFoodId] = useState(initial?.preferredFoodId ?? '');
 
   const finish = () => {
-    router.refresh();
     onDone();
   };
 
@@ -181,11 +178,10 @@ export function GroupsManager({
   weekStart: string;
   weekPreferences: Record<string, string>;
 }) {
-  const router = useRouter();
   const [editing, setEditing] = useState<GroupRow | null>(null);
   const [adding, setAdding] = useState(false);
 
-  const setPreference = useAction(setOptionPreference, { onSuccess: () => router.refresh() });
+  const setPreference = useAction(setOptionPreference);
 
   return (
     <div className="space-y-4">

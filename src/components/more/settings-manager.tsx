@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Bell, BellOff, Check, ChevronRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { updateWaterTarget } from '@/lib/actions/water';
@@ -95,12 +94,10 @@ function Field({ id, label, unit, value, onChange }: { id: string; label: string
  * "Saved" state. Everything that is really a plan concept links to Plan.
  */
 export function SettingsManager({ initial, weekSummary }: { initial: SettingsValues; weekSummary: string }) {
-  const router = useRouter();
   const [saved, setSaved] = useState<string | null>(null);
   const flash = (key: string) => {
     setSaved(key);
     setTimeout(() => setSaved((current) => (current === key ? null : current)), 2000);
-    router.refresh();
   };
 
   const [water, setWater] = useState(String(initial.waterTargetMl));

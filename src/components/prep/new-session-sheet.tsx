@@ -34,7 +34,6 @@ export function NewSessionSheet({
     onSuccess: ({ id }) => {
       setOpen(false);
       router.push(`/prep/${id}`);
-      router.refresh();
     },
   });
 

@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { AlertTriangle, ChevronRight, Plus } from 'lucide-react';
 import {
   deleteGroceryItem,
@@ -65,7 +64,6 @@ function ItemForm({
   onDone: () => void;
   onCancel: () => void;
 }) {
-  const router = useRouter();
   const [name, setName] = useState(initial?.name ?? '');
   const [category, setCategory] = useState<FoodCategoryKey>(initial?.category ?? 'OTHER');
   const [department, setDepartment] = useState(initial?.department ?? '');
@@ -74,7 +72,6 @@ function ItemForm({
   const [notes, setNotes] = useState(initial?.notes ?? '');
 
   const finish = () => {
-    router.refresh();
     onDone();
   };
 
@@ -173,13 +170,12 @@ function ItemForm({
  * actions live in a sheet, so the list itself stays scannable.
  */
 export function GroceryList({ groceryWeekId, items }: { groceryWeekId: string; items: GroceryItemRow[] }) {
-  const router = useRouter();
   const [selected, setSelected] = useState<GroceryItemRow | null>(null);
   const [mode, setMode] = useState<'detail' | 'edit'>('detail');
   const [adding, setAdding] = useState(false);
 
-  const purchased = useAction(togglePurchased, { successToast: false, onSuccess: () => router.refresh() });
-  const have = useAction(toggleHaveAlready, { successToast: false, onSuccess: () => router.refresh() });
+  const purchased = useAction(togglePurchased, { successToast: false });
+  const have = useAction(toggleHaveAlready, { successToast: false });
 
   const grouped = useMemo(() => {
     const map = new Map<FoodCategoryKey, GroceryItemRow[]>();

@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Check, ChevronDown, ChevronRight, Loader2, Snowflake } from 'lucide-react';
 import { toast } from 'sonner';
 import { storeBatchPortions, updatePrepBatch } from '@/lib/actions/prep';
@@ -71,7 +70,6 @@ export function BatchCard({
   daysCovered: number;
   active: boolean;
 }) {
-  const router = useRouter();
   const stage = batchStage(batch);
   const [open, setOpen] = useState<boolean | null>(null);
   const expanded = open ?? active;
@@ -85,12 +83,11 @@ export function BatchCard({
 
   const save = useAction(updatePrepBatch, {
     successToast: false,
-    onSuccess: () => router.refresh(),
     onNeedsConfirmation: (message) => {
       toast.warning(message, { action: { label: 'Save anyway', onClick: () => submitCooked(true) } });
     },
   });
-  const store = useAction(storeBatchPortions, { successToast: false, onSuccess: () => router.refresh() });
+  const store = useAction(storeBatchPortions, { successToast: false });
 
   const suggestedRaw =
     batch.targetCookedG != null && batch.expectedYieldPct ? Math.round(batch.targetCookedG / (batch.expectedYieldPct / 100)) : null;

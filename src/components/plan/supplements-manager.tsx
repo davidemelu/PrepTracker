@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Pause, Pill, Play, Plus } from 'lucide-react';
 import {
   deleteSupplement,
@@ -57,7 +56,6 @@ function SupplementForm({
   onDone: () => void;
   onCancel: () => void;
 }) {
-  const router = useRouter();
   const [values, setValues] = useState({
     name: initial?.name ?? '',
     dosageAmount: initial?.dosageAmount != null ? String(initial.dosageAmount) : '',
@@ -73,7 +71,6 @@ function SupplementForm({
   });
 
   const finish = () => {
-    router.refresh();
     onDone();
   };
 
@@ -256,11 +253,10 @@ export function SupplementsManager({
   supplements: SupplementRow[];
   meals: Array<{ id: string; name: string }>;
 }) {
-  const router = useRouter();
   const [editing, setEditing] = useState<SupplementRow | null>(null);
   const [adding, setAdding] = useState(false);
 
-  const toggle = useAction(toggleSupplementActive, { onSuccess: () => router.refresh() });
+  const toggle = useAction(toggleSupplementActive);
 
   return (
     <div className="space-y-4">

@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Minus, Package, Plus, Search } from 'lucide-react';
 import {
   adjustInventoryQuantity,
@@ -51,7 +50,6 @@ function ItemForm({
   onDone: () => void;
   onCancel: () => void;
 }) {
-  const router = useRouter();
   const [values, setValues] = useState({
     foodId: initial?.foodId ?? '',
     name: initial?.name ?? '',
@@ -64,7 +62,6 @@ function ItemForm({
   });
 
   const finish = () => {
-    router.refresh();
     onDone();
   };
 
@@ -218,7 +215,6 @@ export function InventoryManager({
   items: InventoryRow[];
   foods: Array<{ id: string; name: string; defaultUnit: string }>;
 }) {
-  const router = useRouter();
   const [location, setLocation] = useState<'ALL' | InventoryRow['location']>('ALL');
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<InventoryRow | null>(null);
@@ -226,7 +222,6 @@ export function InventoryManager({
 
   const adjust = useAction(adjustInventoryQuantity, {
     successToast: false,
-    onSuccess: () => router.refresh(),
   });
 
   const filtered = useMemo(() => {

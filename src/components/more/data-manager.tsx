@@ -1,7 +1,6 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { AlertTriangle, Download, Upload } from 'lucide-react';
 import { restoreFromBackup } from '@/lib/actions/data';
 import { useAction } from '@/lib/hooks/use-action';
@@ -25,7 +24,6 @@ const CSV_EXPORTS = [
  * for anything you want to look at in a spreadsheet.
  */
 export function DataManager() {
-  const router = useRouter();
   const fileInput = useRef<HTMLInputElement>(null);
   const [json, setJson] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -37,7 +35,6 @@ export function DataManager() {
       setFileName(null);
       setConfirm('');
       if (fileInput.current) fileInput.current.value = '';
-      router.refresh();
     },
   });
 

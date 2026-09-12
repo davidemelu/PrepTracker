@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { deleteIngredient, saveIngredient } from '@/lib/actions/plan';
 import { UNIT_DEFINITIONS } from '@/lib/domain/units';
 import { useAction } from '@/lib/hooks/use-action';
@@ -68,7 +67,6 @@ export function IngredientForm({
   onDone?: () => void;
   onCancel?: () => void;
 }) {
-  const router = useRouter();
 
   const [values, setValues] = useState<IngredientFormValues>({
     id: initial?.id,
@@ -84,14 +82,12 @@ export function IngredientForm({
 
   const save = useAction(saveIngredient, {
     onSuccess: () => {
-      router.refresh();
       onDone?.();
     },
   });
 
   const remove = useAction(deleteIngredient, {
     onSuccess: () => {
-      router.refresh();
       onDone?.();
     },
   });

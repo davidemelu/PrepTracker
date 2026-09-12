@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { AlertTriangle, Sparkles } from 'lucide-react';
 import { generateSchedule } from '@/lib/actions/plan';
 import { updateTimingSettings } from '@/lib/actions/settings';
@@ -71,20 +70,18 @@ export function TimingManager({
   mealPlanId: string | null;
   initial: TimingValues;
 }) {
-  const router = useRouter();
   const [values, setValues] = useState(initial);
   const [preview, setPreview] = useState<Array<{ mealId: string; name: string; label: string }> | null>(
     null,
   );
   const [warnings, setWarnings] = useState<string[]>([]);
 
-  const save = useAction(updateTimingSettings, { onSuccess: () => router.refresh() });
+  const save = useAction(updateTimingSettings);
 
   const generate = useAction(generateSchedule, {
     onSuccess: (data) => {
       setPreview(data.meals.map((m) => ({ mealId: m.mealId, name: m.name, label: m.label })));
       setWarnings(data.warnings);
-      router.refresh();
     },
   });
 

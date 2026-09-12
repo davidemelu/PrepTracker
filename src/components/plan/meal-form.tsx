@@ -57,7 +57,6 @@ export function MealForm({
 
   const save = useAction(saveMeal, {
     onSuccess: ({ id }) => {
-      router.refresh();
       onDone?.(id);
     },
   });
@@ -65,7 +64,6 @@ export function MealForm({
   const remove = useAction(deleteMeal, {
     onSuccess: () => {
       router.push('/plan');
-      router.refresh();
     },
   });
 

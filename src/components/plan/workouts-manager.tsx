@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import { deleteWorkoutFocus, saveWorkoutFocus, setScheduledWorkout } from '@/lib/actions/workout';
 import { weekdayName } from '@/lib/domain/dates';
@@ -47,12 +46,10 @@ export function WorkoutsManager({
   focuses: WorkoutFocusLike[];
   weekdays: WeekdayWorkout[];
 }) {
-  const router = useRouter();
   const [editingFocus, setEditingFocus] = useState<WorkoutFocusLike | null>(null);
   const [addingFocus, setAddingFocus] = useState(false);
   const [editingDay, setEditingDay] = useState<WeekdayWorkout | null>(null);
 
-  const refresh = () => router.refresh();
   const groups = groupFocuses(focuses.filter((f) => f.active));
   const inactive = focuses.filter((f) => !f.active);
 
@@ -173,14 +170,12 @@ export function WorkoutsManager({
           setAddingFocus(false);
           setEditingFocus(null);
         }}
-        onDone={refresh}
       />
 
       <WeekdaySheet
         day={editingDay}
         focuses={focuses}
         onClose={() => setEditingDay(null)}
-        onDone={refresh}
       />
     </div>
   );
@@ -190,12 +185,10 @@ function FocusSheet({
   open,
   focus,
   onClose,
-  onDone,
 }: {
   open: boolean;
   focus: WorkoutFocusLike | null;
   onClose: () => void;
-  onDone: () => void;
 }) {
   const [name, setName] = useState(focus?.name ?? '');
   const [category, setCategory] = useState<WorkoutFocusCategoryKey>(focus?.category ?? 'MUSCLE_GROUP');
@@ -214,10 +207,7 @@ function FocusSheet({
     setPreWorkout(focus?.preWorkoutMinutes != null ? String(focus.preWorkoutMinutes) : '');
   }
 
-  const finish = () => {
-    onDone();
-    onClose();
-  };
+  const finish = () => onClose();
 
   const save = useAction(saveWorkoutFocus, { onSuccess: finish });
   const remove = useAction(deleteWorkoutFocus, { onSuccess: finish });
@@ -325,12 +315,10 @@ function WeekdaySheet({
   day,
   focuses,
   onClose,
-  onDone,
 }: {
   day: WeekdayWorkout | null;
   focuses: WorkoutFocusLike[];
   onClose: () => void;
-  onDone: () => void;
 }) {
   const [selected, setSelected] = useState<string[]>(day?.focusIds ?? []);
   const [name, setName] = useState(day?.workoutName ?? '');
@@ -342,12 +330,7 @@ function WeekdaySheet({
     setName(day?.workoutName ?? '');
   }
 
-  const save = useAction(setScheduledWorkout, {
-    onSuccess: () => {
-      onDone();
-      onClose();
-    },
-  });
+  const save = useAction(setScheduledWorkout, { onSuccess: onClose });
 
   const groups = groupFocuses(focuses.filter((f) => f.active));
 

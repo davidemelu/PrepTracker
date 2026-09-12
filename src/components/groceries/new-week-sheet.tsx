@@ -50,7 +50,6 @@ export function NewWeekSheet({
     onSuccess: ({ id }) => {
       setOpen(false);
       router.push(`/groceries/${id}`);
-      router.refresh();
     },
   });
 

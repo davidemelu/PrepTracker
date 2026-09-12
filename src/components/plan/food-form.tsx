@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 import { toast } from 'sonner';
 import { deleteFood, saveFood } from '@/lib/actions/foods';
@@ -86,11 +85,9 @@ export function FoodForm({
   onDone?: () => void;
   onCancel?: () => void;
 }) {
-  const router = useRouter();
   const [values, setValues] = useState<FoodFormValues>({ ...EMPTY_FOOD, ...initial });
 
   const finish = () => {
-    router.refresh();
     onDone?.();
   };
 

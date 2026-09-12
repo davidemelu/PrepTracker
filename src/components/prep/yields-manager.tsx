@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { setCookingYield } from '@/lib/actions/prep';
 import { cookedToRaw } from '@/lib/domain/yield';
@@ -36,14 +35,12 @@ export interface YieldRow {
  * your own kitchen has actually produced, several times.
  */
 export function YieldsManager({ rows }: { rows: YieldRow[] }) {
-  const router = useRouter();
   const [editing, setEditing] = useState<YieldRow | null>(null);
   const [value, setValue] = useState('');
 
   const save = useAction(setCookingYield, {
     onSuccess: () => {
       setEditing(null);
-      router.refresh();
     },
     onNeedsConfirmation: (message) => {
       toast.warning(message, {
