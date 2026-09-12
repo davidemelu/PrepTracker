@@ -124,6 +124,19 @@ export function planPortions(
   };
 }
 
+/**
+ * Containers needed to hold a cooked amount.
+ *
+ * Ceils, unlike `planPortions`: this answers "how many portions does the plan
+ * ask for", where a part portion still has to go somewhere, rather than "how
+ * many did this batch make". The rounding before the ceiling stops 2450/175
+ * arriving as 14.000000000000002 and asking for fifteen containers.
+ */
+export function portionsRequired(cookedQty: number, portionSizeG: number): number {
+  if (!Number.isFinite(cookedQty) || !Number.isFinite(portionSizeG) || portionSizeG <= 0) return 0;
+  return Math.ceil(round(Math.max(0, cookedQty) / portionSizeG, 4));
+}
+
 export interface YieldObservation {
   yieldPct: number;
   recordedAt: Date | string;
@@ -192,7 +205,7 @@ export function buildMeatRequirement(input: {
     rawRequiredG: usable ? round(cookedToRaw(cookedRequiredG, yieldPct), 1) : null,
     yieldPct: usable ? round(yieldPct, 2) : null,
     portionSizeG,
-    portionsRequired: portionSizeG > 0 ? Math.ceil(round(cookedRequiredG / portionSizeG, 4)) : 0,
+    portionsRequired: portionsRequired(cookedRequiredG, portionSizeG),
     missingYield: !usable,
   };
 }

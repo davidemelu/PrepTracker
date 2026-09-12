@@ -5,6 +5,7 @@ import {
   addDays,
   dayRange,
   fromDbDate,
+  toDayKey,
   toDbDate,
   todayKey,
   type DayKey,
@@ -258,7 +259,9 @@ export async function getYieldHistory(userId: string): Promise<YieldPoint[]> {
       currentPct: row.food?.cookingYieldPct ?? null,
     };
     entry.points.push({
-      date: row.recordedAt.toISOString().slice(0, 10),
+      // Local, not UTC: a batch weighed at 20:00 in Vancouver belongs to that
+      // evening, not to the next calendar day the UTC slice would give it.
+      date: toDayKey(row.recordedAt),
       yieldPct: row.yieldPct,
       source: row.source,
     });

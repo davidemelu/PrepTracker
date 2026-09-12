@@ -134,7 +134,17 @@ export interface GroceryLine {
 
   /** Cooked/raw split, only populated for foods that track a cooking yield. */
   cookedQty: number | null;
+  /**
+   * Total raw weight to buy: the cooked requirement converted, plus anything of
+   * the same food the plan already asks for by raw or as-purchased weight.
+   */
   rawQty: number | null;
+  /**
+   * Raw weight that yields `cookedQty` alone. This is what Prep Day needs —
+   * how much to put in the pan for the batch — and it is smaller than `rawQty`
+   * whenever the same food also appears somewhere in a raw or as-is amount.
+   */
+  rawForCookedQty: number | null;
   yieldPctUsed: number | null;
   /** True when a cooked requirement could not be converted for want of a yield. */
   missingYield: boolean;
@@ -320,12 +330,18 @@ export function generateGroceryList(input: GroceryGenerationInput): GroceryGener
     const usableYield = tracksYield && yieldPct != null && yieldPct > 0;
 
     let shoppingBase: number;
+    // The raw weight that produces the cooked requirement, and nothing else.
+    // Distinct from `shoppingBase`, which also carries any raw and as-is
+    // amounts of the same food: those are already purchase weights and must not
+    // reach the cook, who is being told how much to start with for one batch.
+    let rawForCookedBase: number | null = null;
     let missingYield = false;
 
     if (tracksYield && usableYield) {
       // Convert only the cooked portion; raw and as-is amounts are already
       // purchase weights.
-      shoppingBase = cookedToRaw(cookedBase, yieldPct!) + rawBase + asIsBase;
+      rawForCookedBase = cookedToRaw(cookedBase, yieldPct!);
+      shoppingBase = rawForCookedBase + rawBase + asIsBase;
     } else if (tracksYield) {
       shoppingBase = requiredBase;
       missingYield = true;
@@ -346,6 +362,7 @@ export function generateGroceryList(input: GroceryGenerationInput): GroceryGener
       requiredUnit: displayUnit,
       cookedQty: cookedBase > 0 ? round(toDisplay(cookedBase), 2) : null,
       rawQty: tracksYield ? round(toDisplay(shoppingBase), 2) : null,
+      rawForCookedQty: rawForCookedBase === null ? null : round(toDisplay(rawForCookedBase), 2),
       yieldPctUsed: usableYield ? round(yieldPct!, 2) : null,
       missingYield,
       shoppingQty: round(toDisplay(shoppingBase), 2),
@@ -541,6 +558,7 @@ export function supplementGroceryLines(
         requiredUnit: unit,
         cookedQty: null,
         rawQty: null,
+        rawForCookedQty: null,
         yieldPctUsed: null,
         missingYield: false,
         shoppingQty: round(quantity, 2),
@@ -580,6 +598,7 @@ export interface CookRequirement {
   foodName: string;
   cookedQty: number;
   unit: string;
+  /** Raw weight for this cooked amount alone — what to start the batch with. */
   rawQty: number | null;
   yieldPct: number | null;
   tracksYield: boolean;
@@ -594,8 +613,11 @@ export function cookingRequirements(input: GroceryGenerationInput): CookRequirem
       foodName: line.name,
       cookedQty: line.cookedQty!,
       unit: line.requiredUnit,
-      rawQty: line.rawQty,
+      // The raw weight for the cooked requirement only. `line.rawQty` is the
+      // shopping total and would over-state the batch whenever the same food is
+      // also planned raw somewhere.
+      rawQty: line.rawForCookedQty,
       yieldPct: line.yieldPctUsed,
-      tracksYield: line.rawQty != null || line.missingYield,
+      tracksYield: line.rawForCookedQty != null || line.missingYield,
     }));
 }

@@ -4,15 +4,15 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { requireUserId } from '@/lib/auth/guards';
-import { addDays, toDbDate } from '@/lib/domain/dates';
+import { addDays, toDbDate, todayKey } from '@/lib/domain/dates';
 import { allocatePortions } from '@/lib/domain/storage';
 import {
   effectiveYield,
   measureYield,
   planPortions,
+  portionsRequired,
   validateYieldPct,
 } from '@/lib/domain/yield';
-import { round } from '@/lib/domain/units';
 import { buildGroceryLines } from '@/lib/server/grocery-service';
 import {
   checkbox,
@@ -94,6 +94,15 @@ export async function createPrepSession(input: unknown): Promise<ActionResult<{ 
       .filter((c) => dayTypes.find((d) => d.id === c.dayTypeId)?.isTraining)
       .reduce((sum, c) => sum + c.days, 0);
 
+    // A grocery week supplied by the client is still an id from the client.
+    if (values.groceryWeekId) {
+      const week = await prisma.groceryWeek.findFirst({
+        where: { id: values.groceryWeekId, userId },
+        select: { id: true },
+      });
+      if (!week) return fail('That grocery list could not be found.');
+    }
+
     const session = await prisma.prepSession.create({
       data: {
         userId,
@@ -110,34 +119,40 @@ export async function createPrepSession(input: unknown): Promise<ActionResult<{ 
             foodName: line.name,
             targetCookedG: line.cookedQty,
             portionSizeG,
-            portionsPlanned: Math.ceil(round(line.cookedQty! / portionSizeG, 4)),
+            portionsPlanned: portionsRequired(line.cookedQty!, portionSizeG),
             sortOrder: index,
           })),
         },
         tasks: {
-          create: cookLines.flatMap((line, index) => [
-            {
-              foodId: line.foodId,
-              title: `Cook ${line.name}`,
-              kind: 'COOK' as const,
-              targetQty: line.rawQty ?? line.cookedQty,
-              unit: line.shoppingUnit,
-              sortOrder: index * 2,
-              notes:
-                line.rawQty != null && line.yieldPctUsed != null
-                  ? `Start with about ${line.rawQty} ${line.shoppingUnit} raw at a ${line.yieldPctUsed}% yield.`
-                  : null,
-            },
-            {
-              foodId: line.foodId,
-              title: `Portion ${line.name}`,
-              kind: 'PORTION' as const,
-              targetQty: Math.ceil(round(line.cookedQty! / portionSizeG, 4)),
-              unit: 'serving',
-              sortOrder: index * 2 + 1,
-              notes: `${Math.ceil(round(line.cookedQty! / portionSizeG, 4))} portions of ${portionSizeG} g.`,
-            },
-          ]),
+          create: cookLines.flatMap((line, index) => {
+            const portions = portionsRequired(line.cookedQty!, portionSizeG);
+            return [
+              {
+                foodId: line.foodId,
+                title: `Cook ${line.name}`,
+                kind: 'COOK' as const,
+                // The raw weight for this cooked amount alone. `rawQty` is the
+                // shopping total and includes anything of the same food the
+                // plan asks for raw, which is not going in this pan.
+                targetQty: line.rawForCookedQty ?? line.cookedQty,
+                unit: line.shoppingUnit,
+                sortOrder: index * 2,
+                notes:
+                  line.rawForCookedQty != null && line.yieldPctUsed != null
+                    ? `Start with about ${line.rawForCookedQty} ${line.shoppingUnit} raw at a ${line.yieldPctUsed}% yield.`
+                    : null,
+              },
+              {
+                foodId: line.foodId,
+                title: `Portion ${line.name}`,
+                kind: 'PORTION' as const,
+                targetQty: portions,
+                unit: 'serving',
+                sortOrder: index * 2 + 1,
+                notes: `${portions} portions of ${portionSizeG} g.`,
+              },
+            ];
+          }),
         },
       },
     });
@@ -507,7 +522,7 @@ export async function moveToFridge(input: { id: string }): Promise<ActionResult<
 
     await prisma.storagePortion.update({
       where: { id },
-      data: { location: 'FRIDGE', status: 'THAWING', refrigerateOn: toDbDate(new Date().toISOString().slice(0, 10)) },
+      data: { location: 'FRIDGE', status: 'THAWING', refrigerateOn: toDbDate(todayKey()) },
     });
 
     revalidatePrep();
@@ -542,6 +557,14 @@ export async function addStoragePortion(input: unknown): Promise<ActionResult<{ 
   return runAction(manualPortionSchema, input, async (values) => {
     const userId = await requireUserId();
     const settings = await prisma.settings.findUnique({ where: { userId } });
+
+    if (values.foodId) {
+      const food = await prisma.food.findFirst({
+        where: { id: values.foodId, userId },
+        select: { id: true },
+      });
+      if (!food) return fail('That food could not be found.');
+    }
 
     const useBy =
       values.useByDate ??
