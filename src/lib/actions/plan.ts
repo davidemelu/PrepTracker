@@ -410,6 +410,15 @@ export async function reorderIngredients(input: {
     const userId = await requireUserId();
     await assertOwnsMeal(userId, mealId);
 
+    // Owning the meal is not the same as owning the ids. Without this the sort
+    // order of any ingredient anywhere could be rewritten by guessing its id,
+    // exactly as reorderMeals already guards against.
+    const owned = await prisma.mealIngredient.findMany({
+      where: { id: { in: ids }, mealId },
+      select: { id: true },
+    });
+    if (owned.length !== ids.length) return fail('Some ingredients could not be found.');
+
     await prisma.$transaction(
       ids.map((id, index) => prisma.mealIngredient.update({ where: { id }, data: { sortOrder: index } })),
     );
