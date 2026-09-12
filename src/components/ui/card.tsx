@@ -14,8 +14,19 @@ export function CardHeader({ className, ...props }: React.ComponentProps<'div'>)
   return <div className={cn('flex flex-col gap-1 p-4 pb-2', className)} {...props} />;
 }
 
-export function CardTitle({ className, ...props }: React.ComponentProps<'h3'>) {
-  return <h3 className={cn('text-base font-semibold leading-tight tracking-tight', className)} {...props} />;
+/**
+ * A card's heading.
+ *
+ * `h2` by default, because a card sits directly under the page's `h1` and
+ * hard-coding `h3` skipped a level on every screen that uses one. Pass `as` for
+ * a card nested inside a section that already has its own heading.
+ */
+export function CardTitle({
+  className,
+  as: Tag = 'h2',
+  ...props
+}: React.ComponentProps<'h2'> & { as?: 'h2' | 'h3' | 'h4' }) {
+  return <Tag className={cn('text-base font-semibold leading-tight tracking-tight', className)} {...props} />;
 }
 
 export function CardDescription({ className, ...props }: React.ComponentProps<'p'>) {
