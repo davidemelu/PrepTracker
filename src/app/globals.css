@@ -34,17 +34,23 @@
   --destructive: oklch(0.58 0.21 27);
   --destructive-foreground: oklch(0.99 0.005 260);
 
-  --success: oklch(0.6 0.15 150);
+  /*
+   * Semantic colours are dark enough to be used as text on white (>= 4.5:1)
+   * and as a fill under white text. Tints are made with alpha (bg-success/12).
+   */
+  --success: oklch(0.5 0.135 150);
   --success-foreground: oklch(0.99 0.005 150);
-  --warning: oklch(0.72 0.16 70);
-  --warning-foreground: oklch(0.22 0.04 70);
+  --warning: oklch(0.53 0.13 70);
+  --warning-foreground: oklch(0.99 0.005 70);
 
   --border: oklch(0.91 0.008 260);
-  --input: oklch(0.91 0.008 260);
+  /* 3:1 against the page so a field edge is visible on a 3x display. */
+  --input: oklch(0.66 0.012 260);
   --ring: oklch(0.53 0.17 260);
 
-  --training: oklch(0.6 0.15 150);
-  --rest: oklch(0.62 0.13 235);
+  /* Training shares the primary hue; Rest is teal so neither reads as "done". */
+  --training: oklch(0.53 0.17 260);
+  --rest: oklch(0.5 0.1 195);
 
   --radius: 0.875rem;
 }
@@ -79,11 +85,11 @@
   --warning-foreground: oklch(0.18 0.03 70);
 
   --border: oklch(0.3 0.015 260);
-  --input: oklch(0.32 0.015 260);
+  --input: oklch(0.5 0.015 260);
   --ring: oklch(0.68 0.15 258);
 
-  --training: oklch(0.68 0.15 152);
-  --rest: oklch(0.7 0.12 235);
+  --training: oklch(0.68 0.15 258);
+  --rest: oklch(0.72 0.11 195);
 }
 
 @theme inline {
@@ -118,7 +124,8 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* The system face on purpose: instant, familiar, and it follows the OS text size. */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, ui-sans-serif, sans-serif;
 }
 
 @layer base {
@@ -130,6 +137,30 @@
     -webkit-text-size-adjust: 100%;
     /* Stops iOS Safari zooming when a numeric field is focused. */
     text-size-adjust: 100%;
+  }
+
+  /*
+   * Large phones (iPhone Pro Max, Plus) get a slightly bigger base size so
+   * text and targets grow with the screen instead of leaving empty margins.
+   * Everything in the app is rem-based, so this scales the whole layout.
+   */
+  @media (min-width: 428px) and (max-width: 767px) {
+    html {
+      font-size: 17px;
+    }
+  }
+
+  /* Double tap must never zoom a control; pinch zoom stays available. */
+  button,
+  a,
+  label,
+  input,
+  select,
+  textarea,
+  [role='button'],
+  [role='radio'],
+  [role='tab'] {
+    touch-action: manipulation;
   }
 
   body {

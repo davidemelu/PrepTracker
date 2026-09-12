@@ -28,19 +28,23 @@ export function PageHeader({
         className,
       )}
     >
-      <div className="mx-auto flex max-w-3xl items-center gap-2 px-4 py-3 safe-top">
+      {/*
+        Wraps rather than squeezes: with large accessibility text the actions
+        drop under the title instead of truncating "Today" to "To…".
+      */}
+      <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-x-2 gap-y-1 px-4 py-3 safe-top">
         {backHref ? (
           <Link
             href={backHref}
-            className="-ml-2 flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="-ml-2 flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             aria-label="Back"
           >
             <ChevronLeft className="size-5" />
           </Link>
         ) : null}
 
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-lg font-semibold leading-tight tracking-tight">{title}</h1>
+        <div className="min-w-[8rem] flex-1">
+          <h1 className="truncate text-[22px] font-semibold leading-7 tracking-tight">{title}</h1>
           {subtitle ? <p className="truncate text-sm text-muted-foreground">{subtitle}</p> : null}
         </div>
 

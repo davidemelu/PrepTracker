@@ -1,5 +1,6 @@
 import { requireUser } from '@/lib/auth/guards';
 import { BottomNav } from '@/components/layout/bottom-nav';
+import { OfflineBanner } from '@/components/layout/offline-banner';
 
 /**
  * Every authenticated route lives in this group. The guard runs once here and
@@ -11,6 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-dvh">
       {children}
+      <OfflineBanner />
       <BottomNav />
     </div>
   );
