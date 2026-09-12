@@ -1,0 +1,28 @@
+# Development database only. The Next.js app runs on the host via `npm run dev`.
+# Port 5433 is used on purpose so this never collides with a Postgres you may
+# already run on the default 5432.
+# A distinct project name keeps this stack separate from docker-compose.yml,
+# so `docker compose down` on one can never remove the other.
+name: preptracker-dev
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: preptracker-db-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: preptracker
+      POSTGRES_PASSWORD: preptracker
+      POSTGRES_DB: preptracker
+    ports:
+      - '127.0.0.1:5433:5432'
+    volumes:
+      - preptracker_dev_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U preptracker -d preptracker']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  preptracker_dev_db:

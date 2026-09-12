@@ -1,0 +1,205 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Design tokens.
+ *
+ * Two palettes, one set of names. Everything in the app references these, so a
+ * colour is never hard-coded in a component and dark mode needs no per-component
+ * work. Sizes lean large: this is used one-handed, on a phone, often in a
+ * kitchen or a supermarket aisle.
+ */
+:root {
+  --background: oklch(0.99 0.004 260);
+  --foreground: oklch(0.18 0.02 260);
+
+  --card: oklch(1 0 0);
+  --card-foreground: var(--foreground);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--foreground);
+
+  --primary: oklch(0.53 0.17 260);
+  --primary-foreground: oklch(0.99 0.005 260);
+
+  --secondary: oklch(0.96 0.008 260);
+  --secondary-foreground: oklch(0.28 0.03 260);
+
+  --muted: oklch(0.96 0.008 260);
+  --muted-foreground: oklch(0.52 0.02 260);
+
+  --accent: oklch(0.95 0.02 260);
+  --accent-foreground: oklch(0.28 0.03 260);
+
+  --destructive: oklch(0.58 0.21 27);
+  --destructive-foreground: oklch(0.99 0.005 260);
+
+  --success: oklch(0.6 0.15 150);
+  --success-foreground: oklch(0.99 0.005 150);
+  --warning: oklch(0.72 0.16 70);
+  --warning-foreground: oklch(0.22 0.04 70);
+
+  --border: oklch(0.91 0.008 260);
+  --input: oklch(0.91 0.008 260);
+  --ring: oklch(0.53 0.17 260);
+
+  --training: oklch(0.6 0.15 150);
+  --rest: oklch(0.62 0.13 235);
+
+  --radius: 0.875rem;
+}
+
+.dark {
+  --background: oklch(0.16 0.012 260);
+  --foreground: oklch(0.96 0.005 260);
+
+  --card: oklch(0.21 0.014 260);
+  --card-foreground: var(--foreground);
+  --popover: oklch(0.21 0.014 260);
+  --popover-foreground: var(--foreground);
+
+  --primary: oklch(0.68 0.15 258);
+  --primary-foreground: oklch(0.16 0.02 260);
+
+  --secondary: oklch(0.26 0.015 260);
+  --secondary-foreground: oklch(0.94 0.005 260);
+
+  --muted: oklch(0.26 0.015 260);
+  --muted-foreground: oklch(0.68 0.015 260);
+
+  --accent: oklch(0.3 0.02 260);
+  --accent-foreground: oklch(0.96 0.005 260);
+
+  --destructive: oklch(0.65 0.19 25);
+  --destructive-foreground: oklch(0.16 0.02 260);
+
+  --success: oklch(0.68 0.15 152);
+  --success-foreground: oklch(0.16 0.02 260);
+  --warning: oklch(0.78 0.15 72);
+  --warning-foreground: oklch(0.18 0.03 70);
+
+  --border: oklch(0.3 0.015 260);
+  --input: oklch(0.32 0.015 260);
+  --ring: oklch(0.68 0.15 258);
+
+  --training: oklch(0.68 0.15 152);
+  --rest: oklch(0.7 0.12 235);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-training: var(--training);
+  --color-rest: var(--rest);
+
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 3px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    /* Stops iOS Safari zooming when a numeric field is focused. */
+    text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    /* Room for the fixed bottom nav plus the iPhone home indicator. */
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+    overscroll-behavior-y: none;
+  }
+
+  /* Inputs below 16px cause iOS to zoom the viewport on focus. */
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1rem);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Number inputs: hide spinners, they are useless on a phone. */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+
+  input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+}
+
+@layer utilities {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  /* Horizontal card rails that snap, used for day pickers. */
+  .snap-rail {
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .snap-rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .snap-item {
+    scroll-snap-align: center;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

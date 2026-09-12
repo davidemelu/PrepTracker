@@ -1,0 +1,17 @@
+node_modules
+.next
+.git
+.github
+/src/generated
+/backups
+/coverage
+/playwright-report
+/test-results
+.env
+.env.local
+.env.test
+*.log
+docs
+tests
+README.md
+docker-compose.dev.yml

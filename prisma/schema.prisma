@@ -1,0 +1,1079 @@
+// PrepTracker database schema
+//
+// Design rules:
+//  1. Nothing about a specific meal plan lives here. Plans, foods, quantities,
+//     day types and times are all rows created by the seed and edited in the UI.
+//  2. "Definition" tables are mutable. "Journal" tables (Daily*) are snapshots:
+//     they denormalise name/quantity/unit so that editing or deleting a plan can
+//     never rewrite what was actually planned and eaten on a past date.
+//  3. Every reference from a journal row back to a definition row is nullable and
+//     SetNull on delete, for the same reason.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+// The connection URL lives in prisma.config.ts (Prisma 7 requirement); the
+// runtime client receives it through the @prisma/adapter-pg driver adapter.
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum FoodCategory {
+  PROTEIN
+  CARBOHYDRATE
+  FRUIT
+  VEGETABLE
+  FAT
+  DAIRY
+  SUPPLEMENT
+  SEASONING
+  BEVERAGE
+  OTHER
+}
+
+/// Whether a quantity refers to the food raw, cooked, or as purchased.
+enum IngredientState {
+  RAW
+  COOKED
+  AS_IS
+}
+
+enum BulkClass {
+  EXCELLENT
+  GOOD_IF_FROZEN
+  BUY_FRESH
+  NOT_CLASSIFIED
+}
+
+enum StorageLocation {
+  PANTRY
+  FRIDGE
+  FREEZER
+}
+
+enum MealStatus {
+  PENDING
+  COMPLETED
+  SKIPPED
+}
+
+enum CompletionAction {
+  COMPLETED
+  UNDONE
+  SKIPPED
+  UNSKIPPED
+}
+
+enum SupplementForm {
+  TABLET
+  CAPSULE
+  SOFTGEL
+  SCOOP
+  GUMMY
+  LIQUID
+  POWDER
+  OTHER
+}
+
+enum SupplementTiming {
+  AM
+  WITH_BREAKFAST
+  AFTER_BREAKFAST
+  PRE_WORKOUT
+  POST_WORKOUT
+  WITH_MEAL
+  EVENING
+  BEFORE_BED
+  ANYTIME
+}
+
+enum DayApplicability {
+  EVERY_DAY
+  TRAINING_ONLY
+  REST_ONLY
+}
+
+enum GroceryWeekStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum PrepSessionStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum PrepTaskKind {
+  COOK
+  PORTION
+  SHOP
+  CLEAN
+  OTHER
+}
+
+enum YieldSource {
+  DEFAULT
+  MEASURED
+  MANUAL
+}
+
+enum PortionStatus {
+  READY
+  FROZEN
+  THAWING
+  CONSUMED
+  DISCARDED
+}
+
+/// Grouping for the workout picker, so muscle groups and split names do not
+/// end up jumbled together in one long list.
+enum WorkoutFocusCategory {
+  MUSCLE_GROUP
+  SPLIT
+  CONDITIONING
+  OTHER
+}
+
+enum WaterSource {
+  QUICK_ADD
+  CUSTOM
+  IMPORT
+}
+
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+
+model User {
+  id                 String   @id @default(cuid())
+  username           String   @unique
+  passwordHash       String
+  displayName        String?
+  mustChangePassword Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  settings        Settings?
+  appSettings     AppSetting[]
+  dayTypes        DayType[]
+  scheduleDays    ScheduleDay[]
+  foods           Food[]
+  optionGroups    FoodOptionGroup[]
+  weekPrefs       PlanWeekPreference[]
+  mealPlans       MealPlan[]
+  supplements     Supplement[]
+  dailyPlans      DailyPlan[]
+  waterEntries    WaterEntry[]
+  groceryWeeks    GroceryWeek[]
+  inventoryItems  InventoryItem[]
+  prepSessions    PrepSession[]
+  cookingYields   CookingYield[]
+  storagePortions StoragePortion[]
+  workoutFocuses  WorkoutFocus[]
+
+  @@map("users")
+}
+
+/// Strongly-typed per-user preferences. One row per user.
+model Settings {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Meal timing (HH:mm, 24h, local time)
+  firstMealTime String @default("13:00")
+
+  /// The comfortable spacing between meals, as a range. Meals between two
+  /// anchored points are spread evenly rather than packed against the minimum,
+  /// so the band is a target to sit inside, not a step to count in. A gap
+  /// outside it is reported rather than silently accepted.
+  mealIntervalMinutes    Int @default(150)
+  mealIntervalMaxMinutes Int @default(240)
+  mealDurationMinutes    Int @default(20)
+
+  /// The usual training time. Each day snapshots it into `DailyPlan.workoutTime`
+  /// and can then be changed for that day alone, because gym time varies.
+  workoutTime            String @default("19:30")
+  workoutDurationMinutes Int    @default(60)
+
+  /// Target window for the final meal of the day. The last meal is placed
+  /// inside it when the rest of the day allows.
+  lastMealEarliest String @default("21:00")
+  lastMealLatest   String @default("23:00")
+
+  bedtime            String @default("01:00")
+  preWorkoutMinutes  Int    @default(90)
+  postWorkoutMinutes Int    @default(30)
+
+  /// When true, each day's meal times are computed from the rules above —
+  /// first meal, interval, and the workout anchors — instead of copying each
+  /// meal's stored default time. This is what makes the schedule cascade when
+  /// the first meal moves, and what lets a leg day shift the pre-workout meal.
+  autoScheduleMeals Boolean @default(true)
+
+  // Water
+  waterTargetMl Int @default(4000)
+  quickAddAMl   Int @default(250)
+  quickAddBMl   Int @default(500)
+
+  // Storage planning
+  fridgeDays          Int   @default(3)
+  freezerThawLeadDays Int   @default(1)
+  defaultPortionG     Float @default(175)
+
+  // Planning
+  defaultPlanDays Int @default(7)
+  weekStartsOn    Int @default(1) // 1 = Monday
+
+  // Misc
+  seasoningNote        String?
+  notificationsEnabled Boolean @default(false)
+  theme                String  @default("system")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+/// Generic key/value store for anything that should not require a migration.
+model AppSetting {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key       String
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, key])
+  @@map("app_settings")
+}
+
+// ---------------------------------------------------------------------------
+// Day types and weekly schedule
+// ---------------------------------------------------------------------------
+
+model DayType {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key    String
+  name   String
+
+  /// Semantic hint used for analytics splits and supplement applicability.
+  isTraining Boolean  @default(false)
+  color      String   @default("#64748b")
+  sortOrder  Int      @default(0)
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  scheduleDays ScheduleDay[]
+  mealSettings MealDayTypeSetting[]
+  quantities   MealIngredientQuantity[]
+  dailyPlans   DailyPlan[]
+
+  @@unique([userId, key])
+  @@map("day_types")
+}
+
+/// The repeating weekly pattern. Individual dates override this via DailyPlan.
+model ScheduleDay {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// ISO weekday: 1 = Monday ... 7 = Sunday
+  dayOfWeek Int
+  dayTypeId String
+  dayType   DayType @relation(fields: [dayTypeId], references: [id], onDelete: Cascade)
+
+  /// Default workout label for this weekday, e.g. "Upper A". Copied onto a day
+  /// when it is first generated; changing it never touches days already logged.
+  workoutName String?
+
+  updatedAt DateTime @updatedAt
+
+  focuses ScheduleDayFocus[]
+
+  @@unique([userId, dayOfWeek])
+  @@map("schedule_days")
+}
+
+/// An editable catalogue of what you train: muscle groups, splits, or your own
+/// names. Seeded with the usual options and fully editable.
+model WorkoutFocus {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name   String
+
+  category  WorkoutFocusCategory @default(MUSCLE_GROUP)
+  sortOrder Int                  @default(0)
+  active    Boolean              @default(true)
+
+  /// Overrides how long before training the pre-workout meal sits, in minutes,
+  /// whenever this focus is part of the session. Legs typically want longer.
+  /// Null means use the default from Settings.
+  preWorkoutMinutes Int?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  scheduleDefaults ScheduleDayFocus[]
+  dailyFocuses     DailyWorkoutFocus[]
+
+  @@unique([userId, name])
+  @@index([userId, active])
+  @@map("workout_focuses")
+}
+
+/// The default focuses for a weekday, e.g. Monday = Chest + Triceps.
+model ScheduleDayFocus {
+  id            String       @id @default(cuid())
+  scheduleDayId String
+  scheduleDay   ScheduleDay  @relation(fields: [scheduleDayId], references: [id], onDelete: Cascade)
+  focusId       String
+  focus         WorkoutFocus @relation(fields: [focusId], references: [id], onDelete: Cascade)
+  sortOrder     Int          @default(0)
+
+  @@unique([scheduleDayId, focusId])
+  @@map("schedule_day_focuses")
+}
+
+// ---------------------------------------------------------------------------
+// Foods and substitution groups
+// ---------------------------------------------------------------------------
+
+model Food {
+  id          String       @id @default(cuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  category    FoodCategory @default(OTHER)
+  defaultUnit String       @default("g")
+
+  /// Grocery department, used to group Shopping Mode.
+  department     String?
+  bulkClass      BulkClass       @default(NOT_CLASSIFIED)
+  storageDefault StorageLocation @default(PANTRY)
+
+  // Purchasing
+  packageSize Float?
+  packageUnit String?
+
+  // Raw <-> cooked
+  /// Current effective yield percentage (0 < pct <= 100 normally).
+  cookingYieldPct Float?
+  /// True for foods bought raw and eaten cooked, where yield matters.
+  tracksYield     Boolean @default(false)
+
+  // Optional nutrition, per nutritionBasisQty of nutritionBasisUnit
+  nutritionBasisQty  Float  @default(100)
+  nutritionBasisUnit String @default("g")
+  calories           Float?
+  protein            Float?
+  carbs              Float?
+  fat                Float?
+  fibre              Float?
+  sodium             Float?
+
+  // Reserved for a future external food database import
+  externalSource String?
+  externalId     String?
+
+  notes  String?
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  optionMemberships FoodOptionGroupMember[]
+  preferredBy       FoodOptionGroup[]       @relation("PreferredFood")
+  weekPrefs         PlanWeekPreference[]
+  mealIngredients   MealIngredient[]
+  dailyMealItems    DailyMealItem[]
+  groceryItems      GroceryItem[]
+  inventoryItems    InventoryItem[]
+  prepTasks         PrepTask[]
+  prepBatches       PrepBatch[]
+  cookingYields     CookingYield[]
+  storagePortions   StoragePortion[]
+
+  @@unique([userId, name])
+  @@index([userId, category])
+  @@map("foods")
+}
+
+/// A set of interchangeable foods, e.g. the Meal 5 protein choices.
+model FoodOptionGroup {
+  id     String  @id @default(cuid())
+  userId String
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name   String
+  notes  String?
+
+  /// Default choice when materialising a day.
+  preferredFoodId String?
+  preferredFood   Food?   @relation("PreferredFood", fields: [preferredFoodId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members         FoodOptionGroupMember[]
+  mealIngredients MealIngredient[]
+  weekPrefs       PlanWeekPreference[]
+
+  @@unique([userId, name])
+  @@map("food_option_groups")
+}
+
+model FoodOptionGroupMember {
+  id        String          @id @default(cuid())
+  groupId   String
+  group     FoodOptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  foodId    String
+  food      Food            @relation(fields: [foodId], references: [id], onDelete: Cascade)
+  sortOrder Int             @default(0)
+
+  @@unique([groupId, foodId])
+  @@map("food_option_group_members")
+}
+
+/// A per-week override of an option group preference.
+model PlanWeekPreference {
+  id            String          @id @default(cuid())
+  userId        String
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weekStart     DateTime        @db.Date
+  optionGroupId String
+  optionGroup   FoodOptionGroup @relation(fields: [optionGroupId], references: [id], onDelete: Cascade)
+  foodId        String
+  food          Food            @relation(fields: [foodId], references: [id], onDelete: Cascade)
+  updatedAt     DateTime        @updatedAt
+
+  @@unique([userId, weekStart, optionGroupId])
+  @@map("plan_week_preferences")
+}
+
+// ---------------------------------------------------------------------------
+// Meal plan definition
+// ---------------------------------------------------------------------------
+
+model MealPlan {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  isActive    Boolean   @default(false)
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  meals      Meal[]
+  dailyPlans DailyPlan[]
+
+  @@index([userId, isActive])
+  @@map("meal_plans")
+}
+
+model Meal {
+  id          String   @id @default(cuid())
+  mealPlanId  String
+  mealPlan    MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  sortOrder   Int      @default(0)
+
+  /// Default scheduled time, HH:mm. Null means derive it from the time generator.
+  defaultTime   String?
+  /// Optional eating window length in minutes, e.g. a 30 minute window.
+  windowMinutes Int?
+  isPreWorkout  Boolean  @default(false)
+  isPostWorkout Boolean  @default(false)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  dayTypeSettings     MealDayTypeSetting[]
+  ingredients         MealIngredient[]
+  supplementSchedules SupplementSchedule[]
+  dailyMeals          DailyMeal[]
+
+  @@index([mealPlanId, sortOrder])
+  @@map("meals")
+}
+
+/// Whether a meal applies to a day type, and an optional per-day-type time.
+model MealDayTypeSetting {
+  id           String  @id @default(cuid())
+  mealId       String
+  meal         Meal    @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  dayTypeId    String
+  dayType      DayType @relation(fields: [dayTypeId], references: [id], onDelete: Cascade)
+  included     Boolean @default(true)
+  timeOverride String?
+
+  @@unique([mealId, dayTypeId])
+  @@map("meal_day_type_settings")
+}
+
+/// A line in a meal: either a fixed food or a choice from an option group.
+model MealIngredient {
+  id     String @id @default(cuid())
+  mealId String
+  meal   Meal   @relation(fields: [mealId], references: [id], onDelete: Cascade)
+
+  foodId String?
+  food   Food?   @relation(fields: [foodId], references: [id], onDelete: Cascade)
+
+  optionGroupId String?
+  optionGroup   FoodOptionGroup? @relation(fields: [optionGroupId], references: [id], onDelete: Cascade)
+
+  unit      String
+  state     IngredientState @default(AS_IS)
+  required  Boolean         @default(true)
+  sortOrder Int             @default(0)
+  notes     String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  quantities MealIngredientQuantity[]
+  dailyItems DailyMealItem[]
+
+  @@index([mealId, sortOrder])
+  @@map("meal_ingredients")
+}
+
+/// Quantity of an ingredient for one day type. Supports custom day types.
+model MealIngredientQuantity {
+  id               String         @id @default(cuid())
+  mealIngredientId String
+  mealIngredient   MealIngredient @relation(fields: [mealIngredientId], references: [id], onDelete: Cascade)
+  dayTypeId        String
+  dayType          DayType        @relation(fields: [dayTypeId], references: [id], onDelete: Cascade)
+  quantity         Float
+
+  @@unique([mealIngredientId, dayTypeId])
+  @@map("meal_ingredient_quantities")
+}
+
+// ---------------------------------------------------------------------------
+// Supplements
+// ---------------------------------------------------------------------------
+
+model Supplement {
+  id           String  @id @default(cuid())
+  userId       String
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  dosageAmount Float?
+  dosageUnit   String?
+
+  /// Tablets, capsules or scoops per dose.
+  countPerDose Float          @default(1)
+  form         SupplementForm @default(CAPSULE)
+  notes        String?
+  active       Boolean        @default(true)
+  sortOrder    Int            @default(0)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  schedules        SupplementSchedule[]
+  dailySupplements DailySupplement[]
+
+  @@index([userId, active])
+  @@map("supplements")
+}
+
+model SupplementSchedule {
+  id           String           @id @default(cuid())
+  supplementId String
+  supplement   Supplement       @relation(fields: [supplementId], references: [id], onDelete: Cascade)
+  timing       SupplementTiming @default(ANYTIME)
+
+  /// Optional association with a specific meal.
+  mealId        String?
+  meal          Meal?            @relation(fields: [mealId], references: [id], onDelete: SetNull)
+  timeOfDay     String?
+  applicability DayApplicability @default(EVERY_DAY)
+  notes         String?
+  sortOrder     Int              @default(0)
+
+  @@index([supplementId])
+  @@map("supplement_schedules")
+}
+
+// ---------------------------------------------------------------------------
+// Journal: one materialised day. Snapshots, never rewritten by plan edits.
+// ---------------------------------------------------------------------------
+
+model DailyPlan {
+  id     String   @id @default(cuid())
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date   DateTime @db.Date
+
+  dayTypeId String?
+  dayType   DayType? @relation(fields: [dayTypeId], references: [id], onDelete: SetNull)
+
+  /// Snapshot so history survives a day type being renamed or deleted.
+  dayTypeName       String
+  dayTypeIsTraining Boolean @default(false)
+
+  mealPlanId   String?
+  mealPlan     MealPlan? @relation(fields: [mealPlanId], references: [id], onDelete: SetNull)
+  mealPlanName String
+
+  /// Snapshot of the water goal in force on this date.
+  waterTargetMl Int     @default(4000)
+  workoutTime   String?
+
+  /// What this session was called, e.g. "Upper A". Free text, optional, and
+  /// independent of the focus list below.
+  workoutName String?
+
+  notes String?
+
+  generatedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  meals          DailyMeal[]
+  supplements    DailySupplement[]
+  waterEntries   WaterEntry[]
+  checkIn        DailyCheckIn?
+  workoutFocuses DailyWorkoutFocus[]
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("daily_plans")
+}
+
+/// What was actually trained on a date.
+///
+/// A journal row like every other: it keeps its own copy of the name, so
+/// renaming or deleting a WorkoutFocus later cannot rewrite what you trained in
+/// March.
+model DailyWorkoutFocus {
+  id          String        @id @default(cuid())
+  dailyPlanId String
+  dailyPlan   DailyPlan     @relation(fields: [dailyPlanId], references: [id], onDelete: Cascade)
+  focusId     String?
+  focus       WorkoutFocus? @relation(fields: [focusId], references: [id], onDelete: SetNull)
+
+  /// Snapshot. This is what history displays, not the live catalogue row.
+  name      String
+  sortOrder Int    @default(0)
+
+  @@unique([dailyPlanId, name])
+  @@index([dailyPlanId, sortOrder])
+  @@map("daily_workout_focuses")
+}
+
+model DailyMeal {
+  id           String    @id @default(cuid())
+  dailyPlanId  String
+  dailyPlan    DailyPlan @relation(fields: [dailyPlanId], references: [id], onDelete: Cascade)
+  sourceMealId String?
+  sourceMeal   Meal?     @relation(fields: [sourceMealId], references: [id], onDelete: SetNull)
+
+  name          String
+  sortOrder     Int     @default(0)
+  scheduledTime String?
+  windowMinutes Int?
+  isPreWorkout  Boolean @default(false)
+
+  status MealStatus @default(PENDING)
+
+  /// When completion was recorded. An audit value: never edited by hand.
+  completedAt DateTime?
+  /// When the meal was actually eaten, "HH:mm". Set from the clock on
+  /// completion and correctable afterwards, for when you log a meal late.
+  /// Kept separate from scheduledTime so the plan's intent is never lost.
+  actualTime  String?
+
+  skippedAt DateTime?
+  notes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items       DailyMealItem[]
+  completions MealCompletion[]
+
+  @@index([dailyPlanId, sortOrder])
+  @@map("daily_meals")
+}
+
+model DailyMealItem {
+  id          String    @id @default(cuid())
+  dailyMealId String
+  dailyMeal   DailyMeal @relation(fields: [dailyMealId], references: [id], onDelete: Cascade)
+
+  sourceIngredientId String?
+  sourceIngredient   MealIngredient? @relation(fields: [sourceIngredientId], references: [id], onDelete: SetNull)
+  foodId             String?
+  food               Food?           @relation(fields: [foodId], references: [id], onDelete: SetNull)
+
+  /// Snapshot fields. These are what history shows, not the live food row.
+  foodName  String
+  quantity  Float
+  unit      String
+  state     IngredientState @default(AS_IS)
+  required  Boolean         @default(true)
+  sortOrder Int             @default(0)
+
+  optionGroupId   String?
+  optionGroupName String?
+
+  /// True when the user swapped the option for this day only.
+  isSubstituted        Boolean @default(false)
+  /// True when today's quantity was edited without changing the plan.
+  isQuantityOverridden Boolean @default(false)
+
+  // Snapshot macros so historical totals never move when a food is re-measured.
+  calories Float?
+  protein  Float?
+  carbs    Float?
+  fat      Float?
+  fibre    Float?
+  sodium   Float?
+
+  notes String?
+
+  @@index([dailyMealId, sortOrder])
+  @@map("daily_meal_items")
+}
+
+/// Append-only audit of completion actions, so undo history survives.
+model MealCompletion {
+  id          String           @id @default(cuid())
+  dailyMealId String
+  dailyMeal   DailyMeal        @relation(fields: [dailyMealId], references: [id], onDelete: Cascade)
+  action      CompletionAction
+  at          DateTime         @default(now())
+  note        String?
+
+  @@index([dailyMealId, at])
+  @@map("meal_completions")
+}
+
+model DailySupplement {
+  id           String      @id @default(cuid())
+  dailyPlanId  String
+  dailyPlan    DailyPlan   @relation(fields: [dailyPlanId], references: [id], onDelete: Cascade)
+  supplementId String?
+  supplement   Supplement? @relation(fields: [supplementId], references: [id], onDelete: SetNull)
+
+  name         String
+  dosageAmount Float?
+  dosageUnit   String?
+  countPerDose Float            @default(1)
+  form         SupplementForm   @default(CAPSULE)
+  timing       SupplementTiming @default(ANYTIME)
+  timingLabel  String
+  timeOfDay    String?
+  sortOrder    Int              @default(0)
+
+  status      MealStatus @default(PENDING)
+  completedAt DateTime?
+  notes       String?
+
+  completions SupplementCompletion[]
+
+  @@index([dailyPlanId, sortOrder])
+  @@map("daily_supplements")
+}
+
+model SupplementCompletion {
+  id                String           @id @default(cuid())
+  dailySupplementId String
+  dailySupplement   DailySupplement  @relation(fields: [dailySupplementId], references: [id], onDelete: Cascade)
+  action            CompletionAction
+  at                DateTime         @default(now())
+
+  @@index([dailySupplementId, at])
+  @@map("supplement_completions")
+}
+
+model WaterEntry {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dailyPlanId String?
+  dailyPlan   DailyPlan?  @relation(fields: [dailyPlanId], references: [id], onDelete: SetNull)
+  date        DateTime    @db.Date
+  amountMl    Int
+  source      WaterSource @default(QUICK_ADD)
+  note        String?
+  createdAt   DateTime    @default(now())
+
+  @@index([userId, date])
+  @@map("water_entries")
+}
+
+model DailyCheckIn {
+  id          String    @id @default(cuid())
+  dailyPlanId String    @unique
+  dailyPlan   DailyPlan @relation(fields: [dailyPlanId], references: [id], onDelete: Cascade)
+
+  ratingHunger    Int?
+  ratingEnergy    Int?
+  ratingTraining  Int?
+  ratingAdherence Int?
+
+  digestionNote      String?
+  workoutNote        String?
+  mealDifficultyNote String?
+  prepIssueNote      String?
+  notes              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("daily_check_ins")
+}
+
+// ---------------------------------------------------------------------------
+// Groceries
+// ---------------------------------------------------------------------------
+
+model GroceryWeek {
+  id           String            @id @default(cuid())
+  userId       String
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  startDate    DateTime          @db.Date
+  endDate      DateTime          @db.Date
+  daysPlanned  Int               @default(7)
+  trainingDays Int               @default(5)
+  restDays     Int               @default(2)
+  status       GroceryWeekStatus @default(DRAFT)
+  notes        String?
+
+  /// Whether inventory was subtracted when this list was generated.
+  inventoryApplied Boolean  @default(false)
+  generatedAt      DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  items        GroceryItem[]
+  prepSessions PrepSession[]
+
+  @@index([userId, startDate])
+  @@map("grocery_weeks")
+}
+
+model GroceryItem {
+  id            String      @id @default(cuid())
+  groceryWeekId String
+  groceryWeek   GroceryWeek @relation(fields: [groceryWeekId], references: [id], onDelete: Cascade)
+  foodId        String?
+  food          Food?       @relation(fields: [foodId], references: [id], onDelete: SetNull)
+
+  name       String
+  category   FoodCategory @default(OTHER)
+  department String?
+
+  /// What the plan needs (cooked weight for meats).
+  requiredQty  Float
+  requiredUnit String
+  /// What to actually buy (raw weight for meats, after inventory subtraction).
+  shoppingQty  Float
+  shoppingUnit String
+
+  cookedQty     Float?
+  rawQty        Float?
+  yieldPctUsed  Float?
+  inventoryQty  Float?
+  /// Set when inventory exists but units could not be converted safely.
+  inventoryNote String?
+
+  estimatedPackages Float?
+  packageSize       Float?
+  packageUnit       String?
+
+  haveAlready Boolean @default(false)
+  purchased   Boolean @default(false)
+  isAdHoc     Boolean @default(false)
+  notes       String?
+  sortOrder   Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groceryWeekId, category])
+  @@map("grocery_items")
+}
+
+// ---------------------------------------------------------------------------
+// Inventory
+// ---------------------------------------------------------------------------
+
+model InventoryItem {
+  id                String          @id @default(cuid())
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  foodId            String?
+  food              Food?           @relation(fields: [foodId], references: [id], onDelete: SetNull)
+  name              String
+  quantity          Float           @default(0)
+  unit              String
+  location          StorageLocation @default(PANTRY)
+  lowStockThreshold Float?
+  expiresOn         DateTime?       @db.Date
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([userId, location])
+  @@map("inventory_items")
+}
+
+// ---------------------------------------------------------------------------
+// Meal prep, cooking yield and storage
+// ---------------------------------------------------------------------------
+
+model PrepSession {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groceryWeekId String?
+  groceryWeek   GroceryWeek? @relation(fields: [groceryWeekId], references: [id], onDelete: SetNull)
+  name          String
+  date          DateTime     @db.Date
+
+  /// How many days of food this session is cooking for.
+  daysCovered  Int               @default(7)
+  trainingDays Int               @default(5)
+  restDays     Int               @default(2)
+  status       PrepSessionStatus @default(PLANNED)
+  notes        String?
+  createdAt    DateTime          @default(now())
+  completedAt  DateTime?
+  updatedAt    DateTime          @updatedAt
+
+  tasks   PrepTask[]
+  batches PrepBatch[]
+
+  @@index([userId, date])
+  @@map("prep_sessions")
+}
+
+model PrepTask {
+  id            String       @id @default(cuid())
+  prepSessionId String
+  prepSession   PrepSession  @relation(fields: [prepSessionId], references: [id], onDelete: Cascade)
+  foodId        String?
+  food          Food?        @relation(fields: [foodId], references: [id], onDelete: SetNull)
+  title         String
+  kind          PrepTaskKind @default(OTHER)
+  targetQty     Float?
+  unit          String?
+  done          Boolean      @default(false)
+  doneAt        DateTime?
+  sortOrder     Int          @default(0)
+  notes         String?
+
+  @@index([prepSessionId, sortOrder])
+  @@map("prep_tasks")
+}
+
+/// One cooked batch: raw in, cooked out, portions produced.
+model PrepBatch {
+  id            String      @id @default(cuid())
+  prepSessionId String
+  prepSession   PrepSession @relation(fields: [prepSessionId], references: [id], onDelete: Cascade)
+  foodId        String?
+  food          Food?       @relation(fields: [foodId], references: [id], onDelete: SetNull)
+  foodName      String
+
+  /// Target cooked amount this batch must produce, from the plan.
+  targetCookedG    Float?
+  rawWeightG       Float?
+  cookedWeightG    Float?
+  /// cookedWeightG / rawWeightG * 100, stored once both weights are known.
+  measuredYieldPct Float?
+
+  portionSizeG       Float @default(175)
+  portionsPlanned    Int?
+  portionsMade       Int?
+  containersPrepared Int?
+
+  /// Cook order. Several batches are created in the same transaction, so
+  /// createdAt is not unique enough to order by.
+  sortOrder Int @default(0)
+
+  notes       String?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  cookingYields   CookingYield[]
+  storagePortions StoragePortion[]
+
+  @@index([prepSessionId])
+  @@map("prep_batches")
+}
+
+/// Append-only yield log. DEFAULT rows are seeds, MEASURED rows come from batches.
+model CookingYield {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  foodId        String?
+  food          Food?       @relation(fields: [foodId], references: [id], onDelete: SetNull)
+  foodName      String
+  yieldPct      Float
+  source        YieldSource @default(MEASURED)
+  rawWeightG    Float?
+  cookedWeightG Float?
+  prepBatchId   String?
+  prepBatch     PrepBatch?  @relation(fields: [prepBatchId], references: [id], onDelete: SetNull)
+  note          String?
+  recordedAt    DateTime    @default(now())
+
+  @@index([userId, foodId, recordedAt])
+  @@map("cooking_yields")
+}
+
+/// Portions of prepared food and where they live.
+model StoragePortion {
+  id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prepBatchId String?
+  prepBatch   PrepBatch? @relation(fields: [prepBatchId], references: [id], onDelete: SetNull)
+  foodId      String?
+  food        Food?      @relation(fields: [foodId], references: [id], onDelete: SetNull)
+
+  label        String
+  portions     Int    @default(1)
+  portionSizeG Float?
+  unit         String @default("g")
+
+  location StorageLocation @default(FRIDGE)
+  status   PortionStatus   @default(READY)
+
+  prepDate      DateTime  @db.Date
+  refrigerateOn DateTime? @db.Date
+  freezeOn      DateTime? @db.Date
+  thawOn        DateTime? @db.Date
+  useByDate     DateTime? @db.Date
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, status])
+  @@index([userId, thawOn])
+  @@map("storage_portions")
+}
