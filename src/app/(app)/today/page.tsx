@@ -120,7 +120,15 @@ export default async function TodayPage({
           </div>
         ) : null}
 
+        {/*
+          Keyed by date. The chevrons either side of the title are soft
+          navigations, so React keeps these components mounted across a change
+          of day and any state they seeded from props on first render — the
+          note, the water amount, the day type — would still be yesterday's.
+          Remounting is cheap here and is the only way to be sure.
+        */}
         <DayStateControl
+          key={date}
           date={date}
           dayTypes={dayTypes}
           currentDayTypeId={day.dayTypeId}
@@ -129,6 +137,7 @@ export default async function TodayPage({
         />
 
         <WorkoutLine
+          key={date}
           date={date}
           isTraining={day.isTraining}
           workout={day.workout}
@@ -165,6 +174,7 @@ export default async function TodayPage({
         ) : null}
 
         <WaterCard
+          key={date}
           date={date}
           water={day.water}
           quickAddA={settings?.quickAddAMl ?? 250}
@@ -219,7 +229,7 @@ export default async function TodayPage({
           </>
         ) : null}
 
-        <NoteRow date={date} checkIn={day.checkIn} dayNotes={day.notes} />
+        <NoteRow key={date} date={date} checkIn={day.checkIn} dayNotes={day.notes} />
       </PageBody>
     </>
   );

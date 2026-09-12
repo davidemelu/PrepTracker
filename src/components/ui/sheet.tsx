@@ -34,6 +34,11 @@ export function SheetContent({
       <DialogPrimitive.Content
         className={cn(
           'fixed inset-x-0 bottom-0 z-50 flex max-h-[92vh] flex-col rounded-t-2xl border border-border bg-card shadow-lg',
+          // The home-indicator inset belongs to the sheet, not to the footer:
+          // most sheets have no footer, and their last control used to sit
+          // under the indicator. The footer below sticks to the scroll area's
+          // bottom edge, which this padding has already lifted clear.
+          'pb-[env(safe-area-inset-bottom)]',
           'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom',
           'sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl',
           className,
@@ -54,7 +59,7 @@ export function SheetContent({
             )}
           </div>
           <DialogPrimitive.Close
-            className="-m-2 flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="-m-1.5 flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Close"
           >
             <X className="size-5" />
@@ -72,7 +77,7 @@ export function SheetFooter({ className, ...props }: React.ComponentProps<'div'>
   return (
     <div
       className={cn(
-        'sticky bottom-0 -mx-4 -mb-4 mt-4 flex gap-2 border-t border-border bg-card p-4 safe-bottom',
+        'sticky bottom-0 -mx-4 -mb-4 mt-4 flex gap-2 border-t border-border bg-card p-4',
         className,
       )}
       {...props}

@@ -109,30 +109,39 @@ export function ShoppingMode({ groceryWeekId, items }: { groceryWeekId: string; 
         with the safe-area inset in standalone mode on a phone.
       */}
       <div className="sticky top-0 z-20 -mx-4 -mt-4 space-y-2 border-b border-border bg-background/95 px-4 py-2 pt-[calc(0.5rem+env(safe-area-inset-top))] backdrop-blur-sm">
-        <div className="flex items-center gap-2">
-          <div className="min-w-0 flex-1" aria-live="polite">
+        {/*
+          The controls drop onto their own row below 360px. Side by side they
+          need 272px — a 160px view toggle, two 44px buttons and the gaps — and
+          a 320px phone only offers 288px of content box, which left the count
+          of what is still to find, the one number this screen exists for,
+          squeezed into about 16px and reading "12 / items / remai…".
+        */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-0 flex-1 basis-full min-[360px]:basis-auto" aria-live="polite">
             <p className="tabular text-2xl font-bold leading-none">{remaining}</p>
             <p className="text-xs text-muted-foreground">
               {remaining === 1 ? 'item' : 'items'} remaining · {total - remaining} in the trolley
             </p>
           </div>
-          <SegmentedControl
-            aria-label="Show"
-            size="sm"
-            className="w-40 shrink-0"
-            value={view}
-            onChange={(v) => setView(v as typeof view)}
-            options={[
-              { value: 'remaining', label: 'Remaining' },
-              { value: 'all', label: 'All' },
-            ]}
-          />
-          <Button variant="outline" size="icon" aria-label="Search the list" aria-pressed={searching} onClick={() => setSearching((s) => !s)}>
-            <Search className="size-5" />
-          </Button>
-          <Button variant="outline" size="icon" aria-label="Add an item" onClick={() => setAdding(true)}>
-            <Plus className="size-5" />
-          </Button>
+          <div className="flex w-full items-center gap-2 min-[360px]:w-auto">
+            <SegmentedControl
+              aria-label="Show"
+              size="sm"
+              className="min-w-0 flex-1 min-[360px]:w-40 min-[360px]:flex-none"
+              value={view}
+              onChange={(v) => setView(v as typeof view)}
+              options={[
+                { value: 'remaining', label: 'Remaining' },
+                { value: 'all', label: 'All' },
+              ]}
+            />
+            <Button variant="outline" size="icon" aria-label="Search the list" aria-pressed={searching} onClick={() => setSearching((s) => !s)}>
+              <Search className="size-5" />
+            </Button>
+            <Button variant="outline" size="icon" aria-label="Add an item" onClick={() => setAdding(true)}>
+              <Plus className="size-5" />
+            </Button>
+          </div>
         </div>
 
         {searching ? (
@@ -152,7 +161,7 @@ export function ShoppingMode({ groceryWeekId, items }: { groceryWeekId: string; 
                 type="button"
                 aria-label="Clear search"
                 onClick={() => setQuery('')}
-                className="absolute right-1 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground"
+                className="absolute right-0 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground"
               >
                 <X className="size-4" />
               </button>
@@ -255,7 +264,8 @@ function AdHocSheet({
               </select>
             </div>
           </div>
-          {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
+          {/* role="alert" so a failure inside a sheet is spoken, not just drawn. */}
+          {save.error ? <p role="alert" className="text-sm text-destructive">{save.error}</p> : null}
         </div>
 
         <SheetFooter>

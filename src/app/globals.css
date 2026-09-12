@@ -31,7 +31,16 @@
   --accent: oklch(0.95 0.02 260);
   --accent-foreground: oklch(0.28 0.03 260);
 
-  --destructive: oklch(0.58 0.21 27);
+  /*
+   * Darkened from L 0.58, which sat just on the AA boundary against white and
+   * fell under it against the card and muted surfaces. It is used as
+   * normal-size text for every inline error and for the delete label, so it has
+   * to clear 4.5:1 with room to spare rather than exactly: at L 0.55 it reads
+   * 5.4:1 on white and 5.3:1 on --background, and still carries white text at
+   * the same ratio when used as a fill. The dark palette already passes and is
+   * left alone.
+   */
+  --destructive: oklch(0.55 0.21 27);
   --destructive-foreground: oklch(0.99 0.005 260);
 
   /*

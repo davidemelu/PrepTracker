@@ -117,7 +117,8 @@ export default async function AnalyticsPage({
                 <CardHeader>
                   <CardTitle>Weekly adherence</CardTitle>
                   <CardDescription>
-                    Overall in blue, meals in green, water in light blue
+                    Overall is the solid line, meals dashed and water dotted; every week&apos;s
+                    figures are written out under the chart.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -130,7 +131,7 @@ export default async function AnalyticsPage({
               <Card>
                 <CardHeader>
                   <CardTitle>Water, last 14 days</CardTitle>
-                  <CardDescription>Green bars hit the target</CardDescription>
+                  <CardDescription>Which days reached the target is counted below</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <WaterTrendChart data={water} />
@@ -142,7 +143,7 @@ export default async function AnalyticsPage({
               <Card>
                 <CardHeader>
                   <CardTitle>Completion by meal</CardTitle>
-                  <CardDescription>Which meal slips most often</CardDescription>
+                  <CardDescription>Which meal slips most often, each with its figures</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <CompletionByMealChart data={byMeal} />
@@ -177,6 +178,7 @@ export default async function AnalyticsPage({
                   <li key={row.foodName} className="flex justify-between gap-2 text-xs">
                     <span>{row.foodName}</span>
                     <span className="tabular text-muted-foreground">
+                      {Math.round(row.averagePct)}% average ·{' '}
                       {row.points.filter((p) => p.source === 'MEASURED').length} measured · now{' '}
                       {row.currentPct ?? '—'}%
                     </span>

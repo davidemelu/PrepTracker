@@ -25,7 +25,7 @@ function Stat({ label, value, percent, className }: { label: string; value: stri
 /**
  * How today is going, in one line: three counts with thin bars. No overall
  * percentage and no red ring during the day; a partial day is not a score.
- * Tapping opens the detail with calories and macros written out.
+ * "Details" opens the sheet with calories and macros written out.
  */
 export function ProgressStrip({ day }: { day: DayView }) {
   const [open, setOpen] = useState(false);
@@ -34,31 +34,48 @@ export function ProgressStrip({ day }: { day: DayView }) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label="Today's progress. Show details"
-        className="grid w-full grid-cols-3 gap-4 rounded-xl px-1 py-1 text-left"
-      >
-        <Stat
-          label="Meals"
-          value={`${adherence.meals.completed} / ${adherence.meals.total}`}
-          percent={adherence.meals.percent}
-          className={adherence.meals.completed === adherence.meals.total && adherence.meals.total > 0 ? 'bg-success' : undefined}
-        />
-        <Stat
-          label="Water"
-          value={`${formatWater(water.totalMl)} / ${formatWater(water.targetMl)}`}
-          percent={water.percentCapped}
-          className={water.goalReached ? 'bg-success' : undefined}
-        />
-        <Stat
-          label="Supplements"
-          value={`${adherence.supplements.completed} / ${adherence.supplements.total}`}
-          percent={adherence.supplements.percent}
-          className={adherence.supplements.completed === adherence.supplements.total && adherence.supplements.total > 0 ? 'bg-success' : undefined}
-        />
-      </button>
+      {/*
+        A section rather than one big button. As a button with an aria-label the
+        label replaced everything inside it, so a screen reader heard "Today's
+        progress, show details" and never the three numbers that are the whole
+        point; block content inside a button is invalid besides. The numbers are
+        now plain text and the sheet has its own control.
+      */}
+      <section aria-labelledby="progress-heading" className="rounded-xl px-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 id="progress-heading" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Progress
+          </h2>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="-mr-2 h-11 px-2 text-sm font-semibold text-primary"
+          >
+            Details
+          </button>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <Stat
+            label="Meals"
+            value={`${adherence.meals.completed} / ${adherence.meals.total}`}
+            percent={adherence.meals.percent}
+            className={adherence.meals.completed === adherence.meals.total && adherence.meals.total > 0 ? 'bg-success' : undefined}
+          />
+          <Stat
+            label="Water"
+            value={`${formatWater(water.totalMl)} / ${formatWater(water.targetMl)}`}
+            percent={water.percentCapped}
+            className={water.goalReached ? 'bg-success' : undefined}
+          />
+          <Stat
+            label="Supplements"
+            value={`${adherence.supplements.completed} / ${adherence.supplements.total}`}
+            percent={adherence.supplements.percent}
+            className={adherence.supplements.completed === adherence.supplements.total && adherence.supplements.total > 0 ? 'bg-success' : undefined}
+          />
+        </div>
+      </section>
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent title="Today in detail">

@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { WifiOff } from 'lucide-react';
+import { BannerBar, StaleBanner } from '@/components/pwa/stale-banner';
 
 function subscribe(callback: () => void) {
   window.addEventListener('online', callback);
@@ -13,9 +14,14 @@ function subscribe(callback: () => void) {
 }
 
 /**
- * Says so when the phone has no connection. Without it the service worker's
- * cached copy of a page is indistinguishable from a live one, and a "saved"
- * that never reached the server looks like a save.
+ * Says so when the app is not showing live data.
+ *
+ * There are two ways for that to happen and they need different words.
+ * `navigator.onLine` covers the obvious one, the phone with no connection. The
+ * one that actually bites a self-hosted app is the other: full signal, but the
+ * home server is down, so the service worker hands over its last copy and a
+ * stale Today looks exactly like a current one. StaleBanner handles that case
+ * and carries the Retry control.
  *
  * Sits just above the bottom navigation so it is visible on every screen
  * without any header arithmetic.
@@ -27,16 +33,13 @@ export function OfflineBanner() {
     () => true,
   );
 
-  if (online) return null;
+  if (!online) {
+    return (
+      <BannerBar icon={WifiOff}>
+        Offline · showing your last synced plan. Changes will not save until you reconnect.
+      </BannerBar>
+    );
+  }
 
-  return (
-    <div
-      role="status"
-      className="fixed inset-x-0 z-40 flex items-center justify-center gap-2 border-t border-warning/40 bg-warning/12 px-4 py-2 text-sm font-medium text-warning backdrop-blur-sm"
-      style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}
-    >
-      <WifiOff className="size-4 shrink-0" aria-hidden />
-      Offline · showing your last synced plan. Changes will not save until you reconnect.
-    </div>
-  );
+  return <StaleBanner />;
 }

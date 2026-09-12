@@ -1,13 +1,25 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { UpdatePrompt } from '@/components/pwa/update-prompt';
+
+/** Inlined by next.config.ts; see the BUILD_ID comment there. */
+const BUILD_ID = process.env.NEXT_PUBLIC_BUILD_ID ?? 'dev';
 
 /**
  * Service worker lifecycle.
  *
- * In production: registers the worker after the page is interactive, and
- * activates a waiting update immediately so a deployed change is never one
- * refresh behind.
+ * In production: registers the worker after the page is interactive, then
+ * leaves a newly installed worker waiting and offers a reload instead of
+ * letting it take over. A worker that claims a live page leaves that page
+ * running the previous build's JavaScript, and the next tap fails with "Failed
+ * to find Server Action" — the project's own troubleshooting entry. Waiting
+ * costs one prompt; taking over costs the user their next action.
+ *
+ * The script is registered as /sw.js?v=<build id> so that a deployment changes
+ * the script URL. That is what makes the browser install the new worker at all
+ * (the file's bytes never change) and what gives the worker its cache
+ * generation; see the comment above VERSION in public/sw.js.
  *
  * In development: actively *unregisters* any worker and deletes its caches.
  * That matters because a service worker outlives the build that installed it.
@@ -19,6 +31,10 @@ import { useEffect } from 'react';
  * longer has.
  */
 export function ServiceWorkerRegistrar() {
+  const [updateReady, setUpdateReady] = useState(false);
+  const waitingRef = useRef<ServiceWorker | null>(null);
+  const reloadingRef = useRef(false);
+
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
 
@@ -27,22 +43,53 @@ export function ServiceWorkerRegistrar() {
       return;
     }
 
+    let cancelled = false;
+
+    const offerUpdate = (worker: ServiceWorker | null) => {
+      if (cancelled) return;
+      waitingRef.current = worker;
+      setUpdateReady(true);
+    };
+
+    /**
+     * The controller only changes under this page when another tab accepted an
+     * update, or when the reload below asked for one. Either way the page is
+     * now out of step with the worker, so it reloads if it asked and offers to
+     * reload if it did not.
+     */
+    const onControllerChange = () => {
+      if (reloadingRef.current) {
+        window.location.reload();
+        return;
+      }
+      offerUpdate(null);
+    };
+
+    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+
     const register = () => {
       navigator.serviceWorker
-        .register('/sw.js', { scope: '/' })
+        .register(`/sw.js?v=${BUILD_ID}`, { scope: '/' })
         .then((registration) => {
-          // Take a waiting update straight away rather than waiting for every
-          // tab to close.
-          if (registration.waiting) registration.waiting.postMessage('SKIP_WAITING');
+          if (cancelled) return;
 
-          registration.addEventListener('updatefound', () => {
-            const installing = registration.installing;
-            if (!installing) return;
-            installing.addEventListener('statechange', () => {
-              if (installing.state === 'installed' && navigator.serviceWorker.controller) {
-                installing.postMessage('SKIP_WAITING');
+          // A worker only waits when one is already in control, so this cannot
+          // fire on a first visit.
+          if (registration.waiting && navigator.serviceWorker.controller) {
+            offerUpdate(registration.waiting);
+          }
+
+          const track = (worker: ServiceWorker) => {
+            worker.addEventListener('statechange', () => {
+              if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                offerUpdate(worker);
               }
             });
+          };
+
+          if (registration.installing) track(registration.installing);
+          registration.addEventListener('updatefound', () => {
+            if (registration.installing) track(registration.installing);
           });
         })
         .catch(() => {
@@ -52,13 +99,33 @@ export function ServiceWorkerRegistrar() {
     };
 
     if (document.readyState === 'complete') register();
-    else {
-      window.addEventListener('load', register, { once: true });
-      return () => window.removeEventListener('load', register);
-    }
+    else window.addEventListener('load', register, { once: true });
+
+    return () => {
+      cancelled = true;
+      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+      window.removeEventListener('load', register);
+    };
   }, []);
 
-  return null;
+  const applyUpdate = useCallback(() => {
+    reloadingRef.current = true;
+    const waiting = waitingRef.current;
+
+    if (!waiting) {
+      window.location.reload();
+      return;
+    }
+
+    waiting.postMessage({ type: 'skip-waiting' });
+    // controllerchange normally arrives within a few hundred milliseconds and
+    // reloads for us. If the worker fails to activate, reloading anyway is
+    // still the right answer: the user asked for fresh code.
+    window.setTimeout(() => window.location.reload(), 2000);
+  }, []);
+
+  if (!updateReady) return null;
+  return <UpdatePrompt onReload={applyUpdate} />;
 }
 
 async function cleanUpInDevelopment() {

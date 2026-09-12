@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import { addPrepTask, togglePrepTask } from '@/lib/actions/prep';
@@ -8,7 +8,7 @@ import { useAction } from '@/lib/hooks/use-action';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/primitives';
+import { Checkbox, Label } from '@/components/ui/primitives';
 import { cn } from '@/lib/utils';
 
 export interface PrepTaskRow {
@@ -30,6 +30,7 @@ export function PrepTasks({
 }) {
   const router = useRouter();
   const [title, setTitle] = useState('');
+  const titleId = useId();
 
   const toggle = useAction(togglePrepTask, { successToast: false, onSuccess: () => router.refresh() });
   const add = useAction(addPrepTask, {
@@ -72,7 +73,16 @@ export function PrepTasks({
       </Card>
 
       <div className="flex gap-2">
+        {/*
+          The label is hidden rather than absent. A placeholder is not a name:
+          it disappears as soon as there is any text, and a screen reader
+          reaching this field would otherwise announce only "edit text".
+        */}
+        <Label htmlFor={titleId} className="sr-only">
+          New prep task
+        </Label>
         <Input
+          id={titleId}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Add a task"
