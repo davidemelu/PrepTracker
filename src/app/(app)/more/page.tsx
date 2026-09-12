@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import {
   BarChart3,
+  CalendarDays,
   ChevronRight,
   Database,
   History,
@@ -13,13 +14,20 @@ import {
 import { requireUser } from '@/lib/auth/guards';
 import { signOut } from '@/lib/actions/auth';
 import { PageBody, PageHeader, SectionTitle } from '@/components/layout/page-header';
-import { ThemeToggle } from '@/components/more/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 
 export const metadata = { title: 'More' };
 
 const GROUPS = [
+  {
+    title: 'Insights',
+    links: [
+      { href: '/plan/week', label: 'This week', hint: 'Every day with its meal times', icon: CalendarDays },
+      { href: '/more/history', label: 'History', hint: 'Meals, water, supplements, prep', icon: History },
+      { href: '/more/analytics', label: 'Analytics', hint: 'Trends and adherence', icon: BarChart3 },
+    ],
+  },
   {
     title: 'Kitchen',
     links: [
@@ -28,17 +36,10 @@ const GROUPS = [
     ],
   },
   {
-    title: 'Insights',
-    links: [
-      { href: '/more/history', label: 'History', hint: 'Meals, water, supplements, prep', icon: History },
-      { href: '/more/analytics', label: 'Analytics', hint: 'Trends and adherence charts', icon: BarChart3 },
-    ],
-  },
-  {
     title: 'App',
     links: [
-      { href: '/more/settings', label: 'Settings', hint: 'Water, storage, timing, reminders', icon: Settings },
-      { href: '/more/data', label: 'Backup & export', hint: 'JSON and CSV, import a backup', icon: Database },
+      { href: '/more/settings', label: 'Settings', hint: 'Water, timing, storage, reminders, appearance', icon: Settings },
+      { href: '/more/data', label: 'Backup & export', hint: 'JSON and CSV, restore a backup', icon: Database },
       { href: '/more/account', label: 'Account', hint: 'Username and password', icon: UserRound },
     ],
   },
@@ -49,7 +50,7 @@ export default async function MorePage() {
 
   return (
     <>
-      <PageHeader title="More" subtitle={user.displayName ?? user.username} action={<ThemeToggle />} />
+      <PageHeader title="More" subtitle={user.displayName ?? user.username} />
 
       <PageBody>
         {user.mustChangePassword ? (
@@ -76,12 +77,12 @@ export default async function MorePage() {
                     href={link.href}
                     className="flex min-h-14 items-center gap-3 px-4 py-3 transition-colors first:rounded-t-xl last:rounded-b-xl hover:bg-accent/40"
                   >
-                    <Icon className="size-5 shrink-0 text-muted-foreground" />
+                    <Icon className="size-5 shrink-0 text-muted-foreground" aria-hidden />
                     <span className="min-w-0 flex-1">
                       <span className="block font-medium leading-tight">{link.label}</span>
                       <span className="block text-xs text-muted-foreground">{link.hint}</span>
                     </span>
-                    <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                    <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                   </Link>
                 );
               })}
@@ -96,9 +97,7 @@ export default async function MorePage() {
           </Button>
         </form>
 
-        <p className="pb-2 text-center text-xs text-muted-foreground">
-          PrepTracker · self-hosted · your data stays on your machine
-        </p>
+        <p className="pb-2 text-center text-xs text-muted-foreground">PrepTracker · self-hosted · your data stays on your machine</p>
       </PageBody>
     </>
   );
