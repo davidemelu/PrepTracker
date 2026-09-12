@@ -31,18 +31,22 @@ test('the full weekly workflow', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'Today', exact: true })).toBeVisible();
 
     for (const name of ['Meal 1', 'Meal 2', 'Meal 3', 'Meal 4', 'Meal 5']) {
-      await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name, exact: true, level: 3 })).toBeVisible();
     }
 
     // Friday is a training day in the seeded schedule.
-    await expect(page.getByText('Training').first()).toBeVisible();
+    await expect(page.getByRole('radio', { name: 'Training' })).toHaveAttribute('aria-checked', 'true');
 
-    // Training-day quantities, straight from the plan rows.
+    // Training-day quantities, straight from the plan rows. Rows are collapsed
+    // until opened, so open Meal 2 to see its plate.
+    await page.getByRole('button', { name: /Meal 2/ }).click();
     await expect(page.getByText('225 g').first()).toBeVisible();
     await expect(page.getByText('175 g').first()).toBeVisible();
 
     // Macros are rolled up from the snapshot, not the live food rows.
+    await page.getByRole('button', { name: /Show details/ }).click();
     await expect(page.getByText(/kcal ·/)).toBeVisible();
+    await page.keyboard.press('Escape');
 
     // Which reminders appear depends on the time of day the suite runs, so the
     // ranking and the low-stock collapsing are asserted in the unit tests
@@ -51,14 +55,15 @@ test('the full weekly workflow', async ({ page }) => {
 
   await test.step('logging water updates the total immediately', async () => {
     await expect(page.getByText('0 mL', { exact: true }).first()).toBeVisible();
-    await page.getByRole('button', { name: '500', exact: true }).click();
-    await expect(page.getByText('500 mL').first()).toBeVisible();
+    await page.getByRole('button', { name: '500 mL', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Undo 500 mL' })).toBeVisible();
   });
 
   await test.step('completing a meal records it', async () => {
-    await page.getByRole('button', { name: 'Mark as eaten' }).first().click();
-    await expect(page.getByRole('button', { name: 'Undo', exact: true }).first()).toBeVisible();
-    await expect(page.getByText('1/5')).toBeVisible();
+    await page.getByRole('button', { name: 'Mark eaten' }).first().click();
+    // The row now reads planned → eaten, e.g. "8:00 AM → 4:12 PM".
+    await expect(page.getByText(/\d+:\d\d [AP]M → \d+:\d\d [AP]M/).first()).toBeVisible();
+    await expect(page.getByText('1 / 5').first()).toBeVisible();
   });
 
   await test.step('ticking a supplement records it', async () => {
