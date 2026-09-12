@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Sparkles } from 'lucide-react';
 import { generateGroceryWeek } from '@/lib/actions/groceries';
 import { useAction } from '@/lib/hooks/use-action';
-import { Button } from '@/components/ui/button';
+import { Button, type ButtonProps } from '@/components/ui/button';
 import { Input, NumberInput } from '@/components/ui/input';
 import { Label, Switch } from '@/components/ui/primitives';
 import { Sheet, SheetContent, SheetFooter } from '@/components/ui/sheet';
@@ -19,12 +19,21 @@ export interface DayTypeCountRow {
 /**
  * Creating a list. The day-type counts are prefilled from the weekly schedule
  * (5 training, 2 rest by default) but stay editable, because a real week is
- * often not the template week.
+ * often not the template week. Options that rarely change sit behind a
+ * disclosure so the common case is two taps.
  */
 export function NewWeekSheet({
   defaults,
+  triggerLabel = 'New list',
+  triggerVariant = 'ghost',
+  triggerSize = 'sm',
+  triggerClassName,
 }: {
   defaults: { startDate: string; daysPlanned: number; dayTypes: DayTypeCountRow[] };
+  triggerLabel?: string;
+  triggerVariant?: ButtonProps['variant'];
+  triggerSize?: ButtonProps['size'];
+  triggerClassName?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -49,25 +58,20 @@ export function NewWeekSheet({
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <Button size="sm" onClick={() => setOpen(true)}>
+      <Button
+        size={triggerSize}
+        variant={triggerVariant}
+        className={triggerClassName ?? (triggerVariant === 'ghost' ? 'text-primary' : undefined)}
+        onClick={() => setOpen(true)}
+      >
         <Plus className="size-4" />
-        List
+        {triggerLabel}
       </Button>
 
       <SheetContent title="New grocery list" description="Built from your active meal plan.">
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="gw-name">Name</Label>
-            <Input
-              id="gw-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={`Week of ${startDate}`}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="gw-start">Starting</Label>
+            <Label htmlFor="gw-start">Week starting</Label>
             <input
               id="gw-start"
               type="date"
@@ -97,28 +101,33 @@ export function NewWeekSheet({
             <p className="text-xs text-muted-foreground">{totalDays} days in total.</p>
           </fieldset>
 
-          <div className="space-y-2 rounded-lg border border-border p-3">
-            <label className="flex items-center justify-between gap-3">
-              <span className="text-sm">
-                Subtract what I already have
-                <span className="block text-xs text-muted-foreground">
-                  Only where the inventory units convert safely.
+          <details className="rounded-lg border border-border">
+            <summary className="cursor-pointer list-none px-3 py-3 text-sm font-medium">Options</summary>
+            <div className="space-y-3 px-3 pb-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="gw-name">Name</Label>
+                <Input id="gw-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={`Week of ${startDate}`} />
+              </div>
+              <label className="flex min-h-11 items-center justify-between gap-3">
+                <span className="text-sm">
+                  Use what I already have
+                  <span className="block text-xs text-muted-foreground">Subtracts inventory where the units convert.</span>
                 </span>
-              </span>
-              <Switch checked={applyInventory} onCheckedChange={setApplyInventory} />
-            </label>
-            <label className="flex items-center justify-between gap-3">
-              <span className="text-sm">Include supplements</span>
-              <Switch checked={includeSupplements} onCheckedChange={setIncludeSupplements} />
-            </label>
-            <label className="flex items-center justify-between gap-3">
-              <span className="text-sm">
-                Include optional ingredients
-                <span className="block text-xs text-muted-foreground">Seasonings and extras.</span>
-              </span>
-              <Switch checked={includeOptional} onCheckedChange={setIncludeOptional} />
-            </label>
-          </div>
+                <Switch checked={applyInventory} onCheckedChange={setApplyInventory} />
+              </label>
+              <label className="flex min-h-11 items-center justify-between gap-3">
+                <span className="text-sm">Include supplements</span>
+                <Switch checked={includeSupplements} onCheckedChange={setIncludeSupplements} />
+              </label>
+              <label className="flex min-h-11 items-center justify-between gap-3">
+                <span className="text-sm">
+                  Include optional ingredients
+                  <span className="block text-xs text-muted-foreground">Seasonings and extras.</span>
+                </span>
+                <Switch checked={includeOptional} onCheckedChange={setIncludeOptional} />
+              </label>
+            </div>
+          </details>
 
           {generate.error ? <p className="text-sm text-destructive">{generate.error}</p> : null}
         </div>
