@@ -16,6 +16,7 @@ import {
   checkbox,
   cuid,
   dayKey,
+  idSchema,
   nonEmptyName,
   numberish,
   optionalCuid,
@@ -297,7 +298,6 @@ export async function saveWorkoutFocus(input: unknown): Promise<ActionResult<{ i
   });
 }
 
-const idSchema = z.object({ id: cuid });
 
 export async function deleteWorkoutFocus(input: { id: string }): Promise<ActionResult<undefined>> {
   return runAction(idSchema, input, async ({ id }) => {

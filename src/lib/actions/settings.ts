@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { requireUserId } from '@/lib/auth/guards';
-import { checkbox, cuid, nonEmptyName, numberish, optionalText, timeString } from '@/lib/validation/common';
+import { checkbox, cuid, idSchema, nonEmptyName, numberish, optionalText, timeString } from '@/lib/validation/common';
 import { fail, ok, runAction, type ActionResult } from './result';
 
 /** Timing preferences, storage defaults, day types and the weekly schedule. */
@@ -235,7 +235,6 @@ export async function saveDayType(input: unknown): Promise<ActionResult<{ id: st
   });
 }
 
-const idSchema = z.object({ id: cuid });
 
 export async function deleteDayType(input: { id: string }): Promise<ActionResult<undefined>> {
   return runAction(idSchema, input, async ({ id }) => {

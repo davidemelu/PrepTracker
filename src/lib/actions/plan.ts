@@ -9,6 +9,7 @@ import { generateMealTimes } from '@/lib/domain/schedule';
 import {
   checkbox,
   cuid,
+  idSchema,
   nonEmptyName,
   numberish,
   optionalCuid,
@@ -83,7 +84,6 @@ export async function saveMealPlan(input: unknown): Promise<ActionResult<{ id: s
   });
 }
 
-const idSchema = z.object({ id: cuid });
 
 /** Exactly one plan is active; the others stay available to switch back to. */
 export async function activateMealPlan(input: { id: string }): Promise<ActionResult<undefined>> {

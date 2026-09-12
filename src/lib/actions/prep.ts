@@ -18,6 +18,7 @@ import {
   checkbox,
   cuid,
   dayKey,
+  idSchema,
   nonEmptyName,
   numberish,
   optionalCuid,
@@ -355,7 +356,6 @@ export async function setPrepSessionStatus(input: {
   });
 }
 
-const idSchema = z.object({ id: cuid });
 
 export async function deletePrepSession(input: { id: string }): Promise<ActionResult<undefined>> {
   return runAction(idSchema, input, async ({ id }) => {

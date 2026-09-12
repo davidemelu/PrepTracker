@@ -9,6 +9,7 @@ import { validateYieldPct } from '@/lib/domain/yield';
 import {
   checkbox,
   cuid,
+  idSchema,
   nonEmptyName,
   numberish,
   optionalCuid,
@@ -187,7 +188,6 @@ export async function saveFood(input: unknown): Promise<ActionResult<{ id: strin
   });
 }
 
-const idSchema = z.object({ id: cuid });
 
 const deleteFoodSchema = z.object({ id: cuid, confirm: z.boolean().optional() });
 

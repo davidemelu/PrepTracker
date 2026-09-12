@@ -8,6 +8,7 @@ import {
   checkbox,
   cuid,
   dosageUnitString,
+  idSchema,
   nonEmptyName,
   numberish,
   optionalCuid,
@@ -254,7 +255,6 @@ export async function saveSupplement(input: unknown): Promise<ActionResult<{ id:
   });
 }
 
-const idSchema = z.object({ id: cuid });
 
 /**
  * Deleting a supplement leaves every past day's record intact: the journal rows

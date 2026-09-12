@@ -8,6 +8,7 @@ import { toDbDate } from '@/lib/domain/dates';
 import {
   cuid,
   dayKey,
+  idSchema,
   nonEmptyName,
   numberish,
   optionalCuid,
@@ -98,7 +99,6 @@ export async function adjustInventoryQuantity(input: {
   });
 }
 
-const idSchema = z.object({ id: cuid });
 
 export async function deleteInventoryItem(input: { id: string }): Promise<ActionResult<undefined>> {
   return runAction(idSchema, input, async ({ id }) => {

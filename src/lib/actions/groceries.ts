@@ -11,6 +11,7 @@ import {
   checkbox,
   cuid,
   dayKey,
+  idSchema,
   nonEmptyName,
   numberish,
   optionalText,
@@ -232,7 +233,6 @@ export async function saveGroceryItem(input: unknown): Promise<ActionResult<{ id
   });
 }
 
-const idSchema = z.object({ id: cuid });
 
 export async function deleteGroceryItem(input: { id: string }): Promise<ActionResult<undefined>> {
   return runAction(idSchema, input, async ({ id }) => {
