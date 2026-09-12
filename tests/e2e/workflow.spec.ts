@@ -77,7 +77,7 @@ test('the full weekly workflow', async ({ page }) => {
     await page.getByRole('link', { name: 'Groceries' }).click();
     await page.waitForURL('**/groceries');
 
-    await page.getByRole('button', { name: 'List', exact: true }).click();
+    await page.getByRole('button', { name: /Generate this week/ }).click();
     await expect(page.getByText('Days to shop for')).toBeVisible();
     await page.getByRole('button', { name: 'Generate' }).click();
 
@@ -85,17 +85,21 @@ test('the full weekly workflow', async ({ page }) => {
 
     // Meals 2 and 4 need 175 g cooked chicken twice a day for seven days:
     // 2450 g cooked, which at the seeded 75% yield is 3.27 kg raw to buy.
-    await expect(page.getByText('Chicken breast')).toBeVisible();
     await expect(page.getByText('3.27 kg')).toBeVisible();
-    // One assertion, because the Meal 5 steak line also shows a 75% yield.
-    await expect(page.getByText('Plan needs 2.45 kg cooked · 75% yield')).toBeVisible();
+    // The reasons live in the item's sheet.
+    await page.getByRole('button', { name: /Chicken breast/ }).click();
+    await expect(page.getByText('2.45 kg cooked')).toBeVisible();
+    await expect(page.getByText('at 75% yield')).toBeVisible();
+    await page.keyboard.press('Escape');
 
     // Meal 5 protein: 175 g cooked once a day for seven days.
-    await expect(page.getByText('Plan needs 1.23 kg cooked · 75% yield')).toBeVisible();
+    await page.getByRole('button', { name: /^Steak/ }).click();
+    await expect(page.getByText('1.23 kg cooked')).toBeVisible();
+    await page.keyboard.press('Escape');
   });
 
   await test.step('shopping mode ticks items off', async () => {
-    await page.getByRole('link', { name: 'Start shopping' }).click();
+    await page.getByRole('link', { name: 'Shop', exact: true }).click();
     await page.waitForURL(/\/shop$/);
 
     const counter = page.locator('p.tabular').first();
@@ -111,7 +115,7 @@ test('the full weekly workflow', async ({ page }) => {
     await page.getByRole('link', { name: 'Prep' }).click();
     await page.waitForURL('**/prep');
 
-    await page.getByRole('button', { name: 'Prep', exact: true }).click();
+    await page.getByRole('button', { name: /Plan a prep session/ }).click();
     await expect(page.getByText('Days of food to cook')).toBeVisible();
     await page.getByRole('button', { name: 'Create' }).click();
 
@@ -122,6 +126,7 @@ test('the full weekly workflow', async ({ page }) => {
 
   await test.step('weighing the batch produces a real yield and a portion count', async () => {
     await page.getByLabel('Raw weight in grams for Chicken breast').fill('2000');
+    await page.getByRole('button', { name: 'Next: cook it' }).click();
     await page.getByLabel('Cooked weight in grams for Chicken breast').fill('1400');
 
     // 1400 / 2000 = 70%, and 1400 g at 175 g a portion is exactly 8 portions.
@@ -129,7 +134,7 @@ test('the full weekly workflow', async ({ page }) => {
     await expect(page.getByText(/8\s*portions of/)).toBeVisible();
 
     await page.getByRole('button', { name: 'Save the Chicken breast batch' }).click();
-    await expect(page.getByText('Cooked', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Store 8 portions/ })).toBeVisible();
   });
 
   await test.step('the measured yield replaces the starting estimate', async () => {
@@ -141,9 +146,8 @@ test('the full weekly workflow', async ({ page }) => {
 
   await test.step('the weekly tracker reflects the day', async () => {
     await page.goto('/plan/week');
-    await expect(page.getByRole('heading', { name: 'Weekly tracker' })).toBeVisible();
-    await expect(page.getByText('perfect days')).toBeVisible();
-    await expect(page.getByText('days tracked')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'This week' })).toBeVisible();
+    await expect(page.getByText(/No finished days to score yet|of \d+ days? on plan/)).toBeVisible();
   });
 
   await test.step('history keeps a record of it', async () => {
