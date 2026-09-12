@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Replace, Trash2 } from 'lucide-react';
+import { Plus, Replace } from 'lucide-react';
 import { deleteOptionGroup, saveOptionGroup, setOptionPreference } from '@/lib/actions/foods';
 import { useAction } from '@/lib/hooks/use-action';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DeleteButton } from '@/components/ui/delete-button';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input, Textarea } from '@/components/ui/input';
@@ -129,15 +130,14 @@ function GroupForm({
       </div>
 
       {initial ? (
-        <Button
-          variant="ghost"
-          className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
-          disabled={remove.isPending}
-          onClick={() => remove.run({ id: initial.id })}
-        >
-          <Trash2 className="size-4" />
-          Delete group
-        </Button>
+        <DeleteButton
+          label="Delete group"
+          title={`Delete ${initial.name}?`}
+          description={`Used by ${initial.usageCount} ingredient${initial.usageCount === 1 ? '' : 's'}. Those lines lose their choice of foods. Days already logged are unchanged.`}
+          pending={remove.isPending}
+          onConfirm={() => remove.run({ id: initial.id })}
+          className="w-full"
+        />
       ) : null}
 
       {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}

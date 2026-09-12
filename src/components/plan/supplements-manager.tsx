@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Pause, Pill, Play, Plus, Trash2 } from 'lucide-react';
+import { Pause, Pill, Play, Plus } from 'lucide-react';
 import {
   deleteSupplement,
   saveSupplement,
@@ -13,6 +13,7 @@ import { DOSAGE_UNITS } from '@/lib/domain/units';
 import { useAction } from '@/lib/hooks/use-action';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DeleteButton } from '@/components/ui/delete-button';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input, NumberInput, Textarea } from '@/components/ui/input';
@@ -211,19 +212,14 @@ function SupplementForm({
       </div>
 
       {initial ? (
-        <Button
-          variant="ghost"
-          className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
-          disabled={remove.isPending}
-          onClick={() => {
-            if (confirm(`Delete ${initial.name}? Past days keep their record.`)) {
-              remove.run({ id: initial.id });
-            }
-          }}
-        >
-          <Trash2 className="size-4" />
-          Delete supplement
-        </Button>
+        <DeleteButton
+          label="Delete supplement"
+          title={`Delete ${initial.name}?`}
+          description="It stops appearing on new days. Past days keep their record. To pause it instead, use the pause button in the list."
+          pending={remove.isPending}
+          onConfirm={() => remove.run({ id: initial.id })}
+          className="w-full"
+        />
       ) : null}
 
       {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}

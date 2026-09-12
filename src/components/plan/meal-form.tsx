@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Trash2 } from 'lucide-react';
+
 import { deleteMeal, saveMeal } from '@/lib/actions/plan';
 import { useAction } from '@/lib/hooks/use-action';
 import { Button } from '@/components/ui/button';
+import { DeleteButton } from '@/components/ui/delete-button';
 import { Input, NumberInput } from '@/components/ui/input';
 import { Checkbox, Label, Switch } from '@/components/ui/primitives';
 import { SheetFooter } from '@/components/ui/sheet';
@@ -186,19 +187,14 @@ export function MealForm({
       </div>
 
       {values.id ? (
-        <Button
-          variant="ghost"
-          className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
-          disabled={remove.isPending}
-          onClick={() => {
-            if (confirm(`Delete ${values.name}? Days you have already logged keep their record.`)) {
-              remove.run({ id: values.id! });
-            }
-          }}
-        >
-          <Trash2 className="size-4" />
-          Delete meal
-        </Button>
+        <DeleteButton
+          label="Delete meal"
+          title={`Delete ${values.name}?`}
+          description="It is removed from the plan and from days generated from now on. Days you have already logged keep their record."
+          pending={remove.isPending}
+          onConfirm={() => remove.run({ id: values.id! })}
+          className="w-full"
+        />
       ) : null}
 
       {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
@@ -227,3 +223,4 @@ export function MealForm({
     </div>
   );
 }
+

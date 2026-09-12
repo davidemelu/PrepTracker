@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { deleteWorkoutFocus, saveWorkoutFocus, setScheduledWorkout } from '@/lib/actions/workout';
 import { weekdayName } from '@/lib/domain/dates';
 import {
@@ -17,6 +17,7 @@ import { useAction } from '@/lib/hooks/use-action';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { DeleteButton } from '@/components/ui/delete-button';
 import { Input, NumberInput } from '@/components/ui/input';
 import { Label, Switch } from '@/components/ui/primitives';
 import { Select } from '@/components/ui/select';
@@ -103,7 +104,7 @@ export function WorkoutsManager({
             );
           })}
           <p className="pt-1 text-xs text-muted-foreground">
-            Change which days are training days under Plan → Weekly schedule.
+            Which days are training days is set in the weekly pattern above.
           </p>
         </CardContent>
       </Card>
@@ -282,19 +283,14 @@ function FocusSheet({
           </label>
 
           {focus ? (
-            <Button
-              variant="ghost"
-              className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
-              disabled={remove.isPending}
-              onClick={() => {
-                if (confirm(`Delete ${focus.name}? Days you trained it keep their record.`)) {
-                  remove.run({ id: focus.id });
-                }
-              }}
-            >
-              <Trash2 className="size-4" />
-              Delete
-            </Button>
+            <DeleteButton
+              label="Delete focus"
+              title={`Delete ${focus.name}?`}
+              description="It disappears from the picker. Days you trained it keep their record."
+              pending={remove.isPending}
+              onConfirm={() => remove.run({ id: focus.id })}
+              className="w-full"
+            />
           ) : null}
 
           {save.error ? <p className="text-sm text-destructive">{save.error}</p> : null}
