@@ -47,19 +47,23 @@ export function DayStateControl({
   const current = dayTypes.find((d) => d.id === currentDayTypeId) ?? null;
   const pendingType = dayTypes.find((d) => d.id === pendingTypeId) ?? null;
 
-  const apply = (dayTypeId: string, keepLoggedMeals: boolean) => {
+  const apply = (dayTypeId: string) => {
     setPendingTypeId(null);
     setListOpen(false);
     startTransition(async () => {
-      const result = await setDayType({ date, dayTypeId, keepLoggedMeals });
-      if (!result.ok) toast.error(result.error);
+      try {
+        const result = await setDayType({ date, dayTypeId });
+        if (!result.ok) toast.error(result.error);
+      } catch {
+        toast.error('Could not reach the server. The day was not changed.');
+      }
     });
   };
 
   const choose = (dayTypeId: string) => {
     if (dayTypeId === currentDayTypeId) return;
     if (loggedMealCount > 0) setPendingTypeId(dayTypeId);
-    else apply(dayTypeId, true);
+    else apply(dayTypeId);
   };
 
   const remaining = Math.max(0, totalMealCount - loggedMealCount);
@@ -129,16 +133,14 @@ export function DayStateControl({
         onOpenChange={(open) => !open && setPendingTypeId(null)}
         title={pendingType ? `Switch to a ${pendingType.name.toLowerCase()} day?` : 'Switch day type?'}
         description={
-          `${loggedMealCount} meal${loggedMealCount === 1 ? ' is' : 's are'} already logged. ` +
-          `${pendingType?.name ?? 'New'} portions will apply to the ${remaining} remaining meal${remaining === 1 ? '' : 's'}. ` +
+          `${loggedMealCount} meal${loggedMealCount === 1 ? ' is' : 's are'} already logged and will stay exactly as recorded. ` +
+          `${pendingType?.name ?? 'New'} portions apply to the ${remaining} meal${remaining === 1 ? '' : 's'} still to come. ` +
           'Today only. Your weekly schedule is unchanged.'
         }
         actions={[
-          { label: 'Keep logged meals as they were', onClick: () => pendingType && apply(pendingType.id, true) },
           {
-            label: `Change all ${totalMealCount} meals`,
-            variant: 'outline',
-            onClick: () => pendingType && apply(pendingType.id, false),
+            label: pendingType ? `Switch to ${pendingType.name.toLowerCase()}` : 'Switch',
+            onClick: () => pendingType && apply(pendingType.id),
           },
         ]}
       />

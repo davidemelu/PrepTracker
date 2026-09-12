@@ -271,21 +271,25 @@ export interface EnsureDayOptions {
   dayTypeId?: string;
   /** Rebuild the day even if it already exists. */
   regenerate?: boolean;
-  /**
-   * When rebuilding, meals already eaten or skipped keep the exact items and
-   * quantities they were logged with. Their status and times are always kept;
-   * this additionally freezes what was on the plate, so switching the day type
-   * after lunch does not rewrite what lunch was.
-   */
-  keepLoggedMeals?: boolean;
 }
 
 /**
  * Get a day, creating it from the active plan the first time it is opened.
  *
- * Regeneration preserves completion state for meals that still exist under the
- * same name, so switching a day from Training to Rest does not lose the fact
- * that you already ate Meal 1.
+ * Rebuilding reconciles in place rather than deleting and re-inserting, because
+ * a row that carries any record of what you did is history:
+ *
+ *   - a meal still pending is re-timed and re-portioned from the current plan;
+ *   - a meal eaten or skipped keeps its items, times and name exactly as logged;
+ *   - a meal the new day type no longer includes is removed only when it is
+ *     pending and nothing was ever recorded against it — otherwise it stays, so
+ *     switching to a rest day after lunch cannot erase lunch;
+ *   - `meal_completions` and `supplement_completions` are never touched, which
+ *     the database now enforces with `onDelete: Restrict`.
+ *
+ * There is deliberately no option to rewrite a logged meal. To re-portion one,
+ * undo the completion first: that returns it to pending and leaves the audit
+ * trail intact.
  */
 export async function ensureDailyPlan(userId: string, date: DayKey, options: EnsureDayOptions = {}) {
   // Fast path, no lock: by far the most common case is a day that already
@@ -333,9 +337,16 @@ export async function ensureDailyPlan(userId: string, date: DayKey, options: Ens
 
       // Re-read inside the lock: another request may have created the day while
       // we were waiting for it.
+      // The completion counts decide whether a row that has fallen out of the
+      // plan may be removed: anything with a recorded action is kept.
       const existing = await tx.dailyPlan.findUnique({
         where: { userId_date: { userId, date: toDbDate(date) } },
-        include: { meals: { include: { items: true } }, supplements: true },
+        include: {
+          meals: {
+            include: { items: true, _count: { select: { completions: true } } },
+          },
+          supplements: { include: { _count: { select: { completions: true } } } },
+        },
       });
 
       const sameDayType = !options.dayTypeId || existing?.dayTypeId === options.dayTypeId;
@@ -416,37 +427,6 @@ export async function ensureDailyPlan(userId: string, date: DayKey, options: Ens
 
       const doses = materialiseSupplements(supplements, dayType.isTraining);
 
-      // Remember what was already done so regeneration does not erase it.
-      const previousMealStatus = new Map(
-        (existing?.meals ?? []).map((m) => [
-          m.sourceMealId ?? m.name,
-          {
-            status: m.status,
-            completedAt: m.completedAt,
-            // Without this, rebuilding a day would throw away when you actually
-            // ate — the one value that cannot be recovered from anywhere else.
-            actualTime: m.actualTime,
-            skippedAt: m.skippedAt,
-            notes: m.notes,
-            items: m.items,
-          },
-        ]),
-      );
-      const previousSupplementStatus = new Map(
-        (existing?.supplements ?? []).map((s) => [
-          `${s.supplementId ?? s.name}:${s.timing}`,
-          { status: s.status, completedAt: s.completedAt },
-        ]),
-      );
-
-      if (existing) {
-        // Water entries and the check-in are keyed to the plan, not the meals,
-        // so they survive; only the generated meal and supplement rows are
-        // replaced.
-        await tx.dailyMeal.deleteMany({ where: { dailyPlanId: existing.id } });
-        await tx.dailySupplement.deleteMany({ where: { dailyPlanId: existing.id } });
-      }
-
       const dailyPlan = existing
         ? await tx.dailyPlan.update({
             where: { id: existing.id },
@@ -481,93 +461,145 @@ export async function ensureDailyPlan(userId: string, date: DayKey, options: Ens
             },
           });
 
+      /*
+       * Reconcile meals in place.
+       *
+       * Rows are claimed by source meal id, falling back to name for meals
+       * whose definition has since been deleted. A claimed row is only ever
+       * re-portioned while it is still pending; once something has been
+       * recorded against it, the row is the record and is left alone.
+       */
+      const unclaimedMeals = [...(existing?.meals ?? [])];
+
+      const claimMeal = (sourceMealId: string | null, name: string) => {
+        const index = unclaimedMeals.findIndex((m) =>
+          sourceMealId && m.sourceMealId ? m.sourceMealId === sourceMealId : m.name === name,
+        );
+        return index === -1 ? null : unclaimedMeals.splice(index, 1)[0]!;
+      };
+
+      const itemRowsFor = (meal: (typeof materialised.meals)[number]) =>
+        meal.items.map((item) => ({
+          sourceIngredientId: item.sourceIngredientId,
+          foodId: item.foodId,
+          foodName: item.foodName,
+          quantity: item.quantity,
+          unit: item.unit,
+          state: item.state,
+          required: item.required,
+          sortOrder: item.sortOrder,
+          optionGroupId: item.optionGroupId,
+          optionGroupName: item.optionGroupName,
+          calories: item.macros.calories,
+          protein: item.macros.protein,
+          carbs: item.macros.carbs,
+          fat: item.macros.fat,
+          fibre: item.macros.fibre,
+          sodium: item.macros.sodium,
+        }));
+
       for (const meal of materialised.meals) {
-        const carried = previousMealStatus.get(meal.sourceMealId) ?? previousMealStatus.get(meal.name);
+        const carried = claimMeal(meal.sourceMealId, meal.name);
 
-        // A logged meal is history: with keepLoggedMeals the plate it was
-        // logged with is copied across untouched instead of being re-portioned.
-        const frozenItems =
-          options.keepLoggedMeals && carried && carried.status !== 'PENDING' && carried.items.length > 0
-            ? carried.items.map((item) => ({
-                sourceIngredientId: item.sourceIngredientId,
-                foodId: item.foodId,
-                foodName: item.foodName,
-                quantity: item.quantity,
-                unit: item.unit,
-                state: item.state,
-                required: item.required,
-                sortOrder: item.sortOrder,
-                optionGroupId: item.optionGroupId,
-                optionGroupName: item.optionGroupName,
-                isSubstituted: item.isSubstituted,
-                isQuantityOverridden: item.isQuantityOverridden,
-                calories: item.calories,
-                protein: item.protein,
-                carbs: item.carbs,
-                fat: item.fat,
-                fibre: item.fibre,
-                sodium: item.sodium,
-                notes: item.notes,
-              }))
-            : null;
+        if (!carried) {
+          await tx.dailyMeal.create({
+            data: {
+              dailyPlanId: dailyPlan.id,
+              sourceMealId: meal.sourceMealId,
+              name: meal.name,
+              sortOrder: meal.sortOrder,
+              scheduledTime: meal.scheduledTime,
+              windowMinutes: meal.windowMinutes,
+              isPreWorkout: meal.isPreWorkout,
+              items: { create: itemRowsFor(meal) },
+            },
+          });
+          continue;
+        }
 
-        await tx.dailyMeal.create({
+        if (carried.status !== 'PENDING') {
+          // Eaten or skipped: the plate, the times and the name stay as logged.
+          // Only the display order follows the plan, which changes nothing about
+          // what the record says.
+          if (carried.sortOrder !== meal.sortOrder) {
+            await tx.dailyMeal.update({
+              where: { id: carried.id },
+              data: { sortOrder: meal.sortOrder },
+            });
+          }
+          continue;
+        }
+
+        await tx.dailyMealItem.deleteMany({ where: { dailyMealId: carried.id } });
+        await tx.dailyMeal.update({
+          where: { id: carried.id },
           data: {
-            dailyPlanId: dailyPlan.id,
             sourceMealId: meal.sourceMealId,
             name: meal.name,
             sortOrder: meal.sortOrder,
             scheduledTime: meal.scheduledTime,
             windowMinutes: meal.windowMinutes,
             isPreWorkout: meal.isPreWorkout,
-            status: carried?.status ?? 'PENDING',
-            completedAt: carried?.completedAt ?? null,
-            actualTime: carried?.actualTime ?? null,
-            skippedAt: carried?.skippedAt ?? null,
-            notes: carried?.notes ?? null,
-            items: {
-              create: frozenItems ?? meal.items.map((item) => ({
-                sourceIngredientId: item.sourceIngredientId,
-                foodId: item.foodId,
-                foodName: item.foodName,
-                quantity: item.quantity,
-                unit: item.unit,
-                state: item.state,
-                required: item.required,
-                sortOrder: item.sortOrder,
-                optionGroupId: item.optionGroupId,
-                optionGroupName: item.optionGroupName,
-                calories: item.macros.calories,
-                protein: item.macros.protein,
-                carbs: item.macros.carbs,
-                fat: item.macros.fat,
-                fibre: item.macros.fibre,
-                sodium: item.macros.sodium,
-              })),
-            },
+            items: { create: itemRowsFor(meal) },
           },
         });
       }
 
+      // Anything the plan no longer includes. A pending row with nothing
+      // recorded against it is simply a plan artefact and goes; everything else
+      // stays, because a rest day that follows a training lunch still has to
+      // show that lunch.
+      for (const orphan of unclaimedMeals) {
+        if (orphan.status === 'PENDING' && orphan._count.completions === 0) {
+          await tx.dailyMealItem.deleteMany({ where: { dailyMealId: orphan.id } });
+          await tx.dailyMeal.delete({ where: { id: orphan.id } });
+        }
+      }
+
+      // Supplements follow the same rule, keyed by supplement and timing.
+      const unclaimedDoses = [...(existing?.supplements ?? [])];
+
+      const claimDose = (supplementId: string | null, name: string, timing: string) => {
+        const index = unclaimedDoses.findIndex(
+          (d) =>
+            d.timing === timing &&
+            (supplementId && d.supplementId ? d.supplementId === supplementId : d.name === name),
+        );
+        return index === -1 ? null : unclaimedDoses.splice(index, 1)[0]!;
+      };
+
       for (const [index, dose] of doses.entries()) {
-        const carried = previousSupplementStatus.get(`${dose.supplementId}:${dose.timing}`);
-        await tx.dailySupplement.create({
-          data: {
-            dailyPlanId: dailyPlan.id,
-            supplementId: dose.supplementId,
-            name: dose.name,
-            dosageAmount: dose.dosageAmount,
-            dosageUnit: dose.dosageUnit,
-            countPerDose: dose.countPerDose,
-            form: dose.form as Prisma.DailySupplementCreateInput['form'],
-            timing: dose.timing,
-            timingLabel: dose.timingLabel,
-            timeOfDay: dose.timeOfDay,
-            sortOrder: index,
-            status: carried?.status ?? 'PENDING',
-            completedAt: carried?.completedAt ?? null,
-          },
+        const carried = claimDose(dose.supplementId, dose.name, dose.timing);
+        const data = {
+          supplementId: dose.supplementId,
+          name: dose.name,
+          dosageAmount: dose.dosageAmount,
+          dosageUnit: dose.dosageUnit,
+          countPerDose: dose.countPerDose,
+          form: dose.form as Prisma.DailySupplementCreateInput['form'],
+          timing: dose.timing,
+          timingLabel: dose.timingLabel,
+          timeOfDay: dose.timeOfDay,
+          sortOrder: index,
+        };
+
+        if (!carried) {
+          await tx.dailySupplement.create({ data: { dailyPlanId: dailyPlan.id, ...data } });
+          continue;
+        }
+
+        // A dose already taken keeps the amount it was taken at; only its place
+        // in the list follows the current plan.
+        await tx.dailySupplement.update({
+          where: { id: carried.id },
+          data: carried.status === 'PENDING' ? data : { sortOrder: index },
         });
+      }
+
+      for (const orphan of unclaimedDoses) {
+        if (orphan.status === 'PENDING' && orphan._count.completions === 0) {
+          await tx.dailySupplement.delete({ where: { id: orphan.id } });
+        }
       }
 
       return dailyPlan.id;
