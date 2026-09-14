@@ -164,7 +164,7 @@ jobs:
       # actually be acted on: an advisory with no fixed version available is a
       # thing to know about, not a reason to block a release.
       - name: Scan the runtime image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: preptracker:${{ steps.meta.outputs.sha }}
           format: table
@@ -173,7 +173,7 @@ jobs:
           exit-code: '1'
 
       - name: Scan the migrate and backup images (report only)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: preptracker-migrate:${{ steps.meta.outputs.version }}
           format: table
