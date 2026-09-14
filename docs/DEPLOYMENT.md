@@ -5,12 +5,35 @@ covers the things you only care about once it is actually running.
 
 ---
 
+## Where this runs
+
+The deployment directory is wherever the repository is checked out: `docker compose`
+reads `docker-compose.yml` from there, and the `./backups` bind mount is relative to
+it. This guide writes that as `$PREPTRACKER` so the commands work whatever you chose.
+
+**This install runs on Docker Desktop for Windows**, with the repository at
+`C:\Users\DavidEmelu\Documents\PrepTracker`. The working copy and the deployment are
+the same folder, so there is no separate clone on a server and no `git pull` before a
+deploy — you are already in it.
+
+On a Linux host the convention is a directory of its own:
+
+```bash
+sudo mkdir -p /srv/preptracker && sudo chown "$USER" /srv/preptracker
+git clone <your-repo> /srv/preptracker
+cd /srv/preptracker
+```
+
+Two things differ between the two, and both are called out where they matter:
+**file ownership on `./backups`** (Docker Desktop handles it, Linux needs a `chown`)
+and **line endings** (see the last section — it is the reason the containers once
+exited 127 on a file that was plainly there).
+
+---
+
 ## First run, step by step
 
 ```bash
-git clone <your-repo> /srv/preptracker
-cd /srv/preptracker
-
 cp .env.example .env
 ```
 
@@ -301,15 +324,21 @@ unnoticed for months.
 
 ### Permissions on `./backups`
 
-The backup service runs as uid 1001, the same uid as the app, so that everything in
-the directory has one owner and the container needs no capabilities:
+The backup service runs as uid 1001, the same uid as the app, so everything in the
+directory has one owner and the container needs no capabilities.
+
+**On Docker Desktop (Windows or macOS): nothing to do.** The bind mount goes through
+the Desktop VM, which does not enforce host ownership, so a container running as uid
+1001 can already write there. Verified on this install rather than assumed.
+
+**On a Linux host** the bind mount is the real filesystem and the uid has to match:
 
 ```bash
-mkdir -p /srv/preptracker/backups
-sudo chown -R 1001:1001 /srv/preptracker/backups
+mkdir -p "$PREPTRACKER/backups"
+sudo chown -R 1001:1001 "$PREPTRACKER/backups"
 ```
 
-If you skip this the container refuses to start and says so.
+Skip it there and the container refuses to start, and says so.
 
 ### Getting a copy off the machine
 
@@ -354,7 +383,8 @@ the public half on the target, then mount the private half read-only:
 ```bash
 ssh-keygen -t ed25519 -N '' -f secrets/backup_ssh_key
 ssh-copy-id -i secrets/backup_ssh_key.pub backups@other-machine
-sudo chown 1001:1001 secrets/backup_ssh_key && chmod 600 secrets/backup_ssh_key
+chmod 600 secrets/backup_ssh_key
+# On a Linux host, also: sudo chown 1001:1001 secrets/backup_ssh_key
 ```
 
 ```yaml
@@ -600,3 +630,42 @@ target architecture, or use `docker buildx` for arm64.
   aisle ordering would key off.
 - **An external food database.** Nutrition is entered by hand. `Food.externalSource` and
   `Food.externalId` exist so an importer can backfill without a migration.
+
+---
+
+## Line endings, if you edit on Windows
+
+Every script that runs in these containers is a Linux shell script, and this
+repository is edited on Windows. Git stores LF, but a checkout with
+`core.autocrlf=true` rewrites the working tree to CRLF — and `docker build` copies the
+working tree, not the commit.
+
+A shell script that arrives with CRLF has a shebang of `#!/bin/sh` followed by a
+carriage return. The kernel then looks for an interpreter with a carriage return in
+its name and gives up, and what you see is:
+
+```
+[FATAL tini (7)] exec /usr/local/bin/migrate-entrypoint.sh failed: No such file or directory
+service "migrate" didn't complete successfully: exit 127
+```
+
+about a file that is unmistakably in the image. This happened once, on the first
+deploy after a merge, because checking the branch out is what converted the files.
+
+Two things now prevent it, and you should not need to think about either:
+
+- `.gitattributes` marks the repository `text=auto eol=lf`, so any checkout produces
+  LF whatever the machine's `autocrlf` is set to.
+- Each entrypoint has its carriage returns stripped as it is copied into the image,
+  so an image built from an unnormalised tree is still correct.
+
+If you ever see exit 127 on a file you can see with your own eyes, this is the first
+thing to check:
+
+```bash
+head -c 12 docker/migrate-entrypoint.sh | od -c | head -1
+# must show  #  !  /  b  i  n  /  s  h  \n   — a \r before the \n is the fault
+```
+
+Note that CI cannot catch this: a Linux runner checks out LF regardless, so the build
+passes there and fails on the machine that deploys.

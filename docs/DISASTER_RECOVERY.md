@@ -8,10 +8,24 @@ Companion to [DEPLOYMENT.md](DEPLOYMENT.md), which covers the normal case.
 
 ---
 
+## Where you are
+
+Every command here runs from the deployment directory — the folder holding
+`docker-compose.yml`. **On this install that is the repository itself**,
+`C:\Users\DavidEmelu\Documents\PrepTracker`, because it runs on Docker Desktop for
+Windows where the working copy and the deployment are the same folder. On a Linux
+host it is wherever you cloned, conventionally `/srv/preptracker`. Written below as
+`$PREPTRACKER` where it has to be spelled out at all.
+
+Docker Desktop also means **you never need `chown` on `./backups`** — the bind mount
+does not enforce host ownership. On a Linux host you do; it is flagged at each point.
+
+---
+
 ## Before anything else
 
 ```bash
-cd /srv/preptracker
+cd "$PREPTRACKER"
 docker compose ps
 docker compose logs --tail=50 app
 ls -lt backups | head
@@ -61,10 +75,13 @@ Nothing on the old machine is needed if you have the four things above.
 1. Install Docker and the Compose plugin on the new host, then:
 
    ```bash
-   sudo mkdir -p /srv/preptracker
-   sudo chown "$USER" /srv/preptracker
+   # Linux host:
+   sudo mkdir -p /srv/preptracker && sudo chown "$USER" /srv/preptracker
    git clone <your-repo> /srv/preptracker
    cd /srv/preptracker
+
+   # Docker Desktop (Windows or macOS): clone wherever you keep projects.
+   # The working copy is the deployment.
    ```
 
 2. Check out the version you were running, not `main`, so the schema matches the
@@ -84,7 +101,9 @@ Nothing on the old machine is needed if you have the four things above.
 4. Put the newest dump in place. If it is the encrypted off-host copy:
 
    ```bash
-   mkdir -p backups && sudo chown -R 1001:1001 backups
+   mkdir -p backups
+   # Linux host only — Docker Desktop needs no chown:
+   #   sudo chown -R 1001:1001 backups
    age -d -i backup-key.txt -o backups/db-restore.sql.gz db-2026-09-11.sql.gz.age
    ```
 
@@ -310,7 +329,7 @@ it beyond a cached copy of the last screens it showed, and the session cookie.
    Every session everywhere stops verifying:
 
    ```bash
-   cd /srv/preptracker
+   cd "$PREPTRACKER"
    openssl rand -base64 32              # put this in .env as AUTH_SECRET
    docker compose up -d app
    ```
@@ -358,7 +377,9 @@ docker compose run --rm backup verify
   one by hand, find the newest that does, and treat everything after it as
   unprotected until the cause is fixed.
 - **`last_dump_result=fail`** — `pg_dump` cannot reach the database or cannot write
-  to `./backups`. Check `sudo chown -R 1001:1001 backups`.
+  to `./backups`. On a Linux host check `sudo chown -R 1001:1001 backups`; on Docker
+  Desktop ownership is not the cause, so look at the database being unreachable or
+  the disk being full.
 - **`last_offsite_result=unconfigured`** — there is no copy anywhere but this
   machine. See [DEPLOYMENT.md](DEPLOYMENT.md) § *Getting a copy off the machine*.
 
