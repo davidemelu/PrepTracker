@@ -126,9 +126,17 @@ export default async function TodayPage({
           of day and any state they seeded from props on first render — the
           note, the water amount, the day type — would still be yesterday's.
           Remounting is cheap here and is the only way to be sure.
+
+          The prefix on each key is not decoration. These are siblings, so a
+          bare `date` would give four children the same key: React then matches
+          children by key, three of the four old fibers are lost from that map
+          and never deleted, and their DOM is left on the page while the new
+          ones are inserted around it. That is a duplicated Training/Rest
+          control and a water card still showing another day's total, added to
+          on every revalidation — which is every tap that logs anything.
         */}
         <DayStateControl
-          key={date}
+          key={`day-state-${date}`}
           date={date}
           dayTypes={dayTypes}
           currentDayTypeId={day.dayTypeId}
@@ -137,7 +145,7 @@ export default async function TodayPage({
         />
 
         <WorkoutLine
-          key={date}
+          key={`workout-${date}`}
           date={date}
           isTraining={day.isTraining}
           workout={day.workout}
@@ -174,7 +182,7 @@ export default async function TodayPage({
         ) : null}
 
         <WaterCard
-          key={date}
+          key={`water-${date}`}
           date={date}
           water={day.water}
           quickAddA={settings?.quickAddAMl ?? 250}
@@ -229,7 +237,7 @@ export default async function TodayPage({
           </>
         ) : null}
 
-        <NoteRow key={date} date={date} checkIn={day.checkIn} dayNotes={day.notes} />
+        <NoteRow key={`note-${date}`} date={date} checkIn={day.checkIn} dayNotes={day.notes} />
       </PageBody>
     </>
   );
